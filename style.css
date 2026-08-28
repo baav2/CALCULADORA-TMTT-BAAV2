@@ -890,3 +890,272 @@ button{cursor:pointer}
     font-size:16px;
   }
 }
+
+
+/* =========================================================
+   V11 · MÓVIL EN VISTA PLANA
+   ========================================================= */
+@media (max-width: 760px) {
+
+  /* Mantener el organizador como tabla plana, no como tarjetas */
+  .simple-table-wrap{
+    display:block;
+    width:100%;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    border:1px solid rgba(203,160,75,.18);
+    border-radius:10px;
+    background:#081624;
+  }
+
+  .simple-editor-table{
+    display:table !important;
+    width:100%;
+    min-width:920px !important;
+    border-collapse:collapse;
+    background:#081624;
+  }
+
+  .simple-editor-table thead{
+    display:table-header-group !important;
+  }
+
+  .simple-editor-table tbody{
+    display:table-row-group !important;
+  }
+
+  .simple-editor-table tr{
+    display:table-row !important;
+    border:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    overflow:visible !important;
+  }
+
+  .simple-editor-table td,
+  .simple-editor-table th{
+    display:table-cell !important;
+    width:auto !important;
+    grid-template-columns:none !important;
+  }
+
+  .simple-editor-table td{
+    padding:6px 6px !important;
+    border-bottom:1px solid rgba(120,189,244,.10) !important;
+    vertical-align:middle !important;
+    background:transparent !important;
+    font-size:10px;
+  }
+
+  .simple-editor-table td::before{
+    content:none !important;
+    display:none !important;
+  }
+
+  .simple-editor-table th{
+    position:sticky;
+    top:0;
+    z-index:3;
+    padding:7px 6px !important;
+    font-size:8px !important;
+    line-height:1.15;
+    white-space:nowrap;
+  }
+
+  .simple-leg-number{
+    width:24px !important;
+    height:24px !important;
+    margin:0 auto 3px auto !important;
+    font-size:10px !important;
+    border-radius:6px;
+  }
+
+  .simple-order{
+    display:flex !important;
+    justify-content:center;
+    gap:2px !important;
+    margin-top:2px !important;
+  }
+
+  .mini-icon{
+    min-width:23px !important;
+    width:23px !important;
+    height:23px !important;
+    font-size:9px !important;
+    border-radius:5px !important;
+    padding:0 !important;
+  }
+
+  .simple-route{
+    display:grid !important;
+    grid-template-columns:60px 10px 60px !important;
+    min-width:140px !important;
+    width:140px !important;
+    gap:3px !important;
+  }
+
+  .simple-route input{
+    min-width:0 !important;
+    width:60px !important;
+    min-height:30px !important;
+    height:30px !important;
+    padding:0 5px !important;
+    font-size:9px !important;
+  }
+
+  .simple-metric{
+    display:block !important;
+    font-size:11px !important;
+    margin:0 0 2px 0 !important;
+    white-space:nowrap;
+  }
+
+  .simple-duration{
+    display:block !important;
+    font-size:7px !important;
+    white-space:nowrap;
+  }
+
+  .simple-duration-select{
+    display:block !important;
+    width:68px !important;
+    max-width:68px !important;
+    min-height:24px !important;
+    height:24px !important;
+    padding:0 2px !important;
+    font-size:7px !important;
+  }
+
+  .compact-time-selects{
+    min-width:92px !important;
+    width:92px !important;
+  }
+
+  .time-select-group{
+    display:grid !important;
+    grid-template-columns:40px 6px 40px !important;
+    width:86px !important;
+    min-width:86px !important;
+    gap:0 !important;
+    align-items:center;
+  }
+
+  .time-select{
+    width:40px !important;
+    min-width:40px !important;
+    min-height:30px !important;
+    height:30px !important;
+    padding:0 2px !important;
+    font-size:9px !important;
+    border-radius:5px !important;
+  }
+
+  .time-colon{
+    width:6px !important;
+    font-size:9px !important;
+  }
+
+  .simple-observation{
+    min-width:120px !important;
+    width:120px !important;
+    min-height:42px !important;
+    height:42px !important;
+    padding:5px !important;
+    font-size:8px !important;
+    resize:none !important;
+  }
+
+  .simple-actions{
+    display:flex !important;
+    gap:3px !important;
+    justify-content:center;
+  }
+
+  .simple-alert,
+  .simple-valid{
+    display:block !important;
+    width:max-content !important;
+    margin:3px auto 0 auto !important;
+    padding:2px 5px !important;
+    font-size:7px !important;
+  }
+
+  /* Encabezado del organizador más compacto */
+  .simple-editor-header{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:7px !important;
+    margin-bottom:8px !important;
+  }
+
+  .summary-actions{
+    display:flex !important;
+    flex-wrap:wrap !important;
+    gap:5px !important;
+  }
+
+  .summary-actions button{
+    flex:1 1 auto;
+    min-width:90px;
+  }
+
+  /* Vista limpia también compacta */
+  .summary-table-wrap{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .summary-table{
+    min-width:650px;
+  }
+
+  .summary-table th{
+    font-size:8px !important;
+    padding:7px 6px !important;
+  }
+
+  .summary-table td{
+    font-size:9px !important;
+    padding:7px 6px !important;
+  }
+}
+
+/* Muy pequeño: aún más compacto, pero siempre plano */
+@media (max-width: 390px) {
+  .simple-editor-table{
+    min-width:860px !important;
+  }
+
+  .simple-route{
+    grid-template-columns:54px 8px 54px !important;
+    min-width:124px !important;
+    width:124px !important;
+  }
+
+  .simple-route input{
+    width:54px !important;
+  }
+
+  .compact-time-selects{
+    min-width:84px !important;
+    width:84px !important;
+  }
+
+  .time-select-group{
+    grid-template-columns:38px 6px 38px !important;
+    width:82px !important;
+    min-width:82px !important;
+  }
+
+  .time-select{
+    width:38px !important;
+    min-width:38px !important;
+    font-size:8px !important;
+  }
+
+  .simple-observation{
+    min-width:105px !important;
+    width:105px !important;
+  }
+}
