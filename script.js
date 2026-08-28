@@ -3,7 +3,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp
+  getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -54,7 +54,8 @@ const state = {
   perfil: null,
   resultadosBase: [],
   filtros: [],
-  resultadoSeleccionado: null
+  resultadoSeleccionado: null,
+  organizador: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -199,6 +200,7 @@ function abrirModulo(modulo) {
 
   if (modulo === "calculadora") renderCalculadora();
   else if (modulo === "guardadas") renderGuardadas();
+  else if (modulo === "vuelos") renderVuelosGuardados();
   else if (modulo === "usuarios") renderPlaceholder("Administrar usuarios", "Este módulo será el siguiente bloque administrativo que construiremos.");
   else if (modulo === "accesos") renderPlaceholder("Registro de accesos", "Los accesos ya se están registrando. En la siguiente versión haremos la consulta visual para administradores.");
 
@@ -649,14 +651,7 @@ function seleccionarCombinacion(r) {
     tipo,
     restricciones: leerRestricciones()
   };
-
-  $("resultsContainer").insertAdjacentHTML("afterbegin", `
-    <div class="notice ok" id="selectedNotice">
-      <b>Combinación seleccionada:</b> ${r.tms.map(fmt).join(" + ")}
-      · TM ${fmt(r.tmTotal)} · TT ${fmt(r.ttTotal)}.
-      <br>El siguiente módulo será <b>Organizar tiempos</b>, donde podrá ordenar las piernas y calcular las horas automáticamente.
-    </div>
-  `);
+  abrirOrganizador(state.resultadoSeleccionado);
 }
 
 function leerRestricciones() {
@@ -765,7 +760,10 @@ async function cargarGuardadas() {
           <p class="saved-combo">${(x.tms||[]).map(fmt).join(" + ")}</p>
           <p>${x.piernas || (x.tms||[]).length} piernas</p>
         </div>
-        <button class="btn-small" data-use-saved="${i}">USAR COMBINACIÓN</button>
+        <div class="saved-actions">
+          <button class="btn-small" data-use-saved="${i}">USAR COMBINACIÓN</button>
+          ${state.perfil?.rol === "admin" ? `<button class="btn-danger" data-delete-combo="${x.id}">ELIMINAR</button>` : ""}
+        </div>
       </div>
     `).join("");
 
@@ -774,15 +772,904 @@ async function cargarGuardadas() {
         const x = items[Number(btn.dataset.useSaved)];
         state.resultadoSeleccionado = {
           tipo:x.tipo, tmTotal:x.tmTotal, ttTotal:x.ttTotal,
-          tms:x.tms || [], tts:x.tts || [], restricciones:{activas:false,noIniciarAntes:null,noFinalizarDespues:null}
+          tms:x.tms || [], tts:x.tts || [],
+          restricciones:{activas:false,noIniciarAntes:null,noFinalizarDespues:null}
         };
-        list.insertAdjacentHTML("afterbegin", `<div class="notice ok"><b>Combinación preparada.</b> En la siguiente versión se abrirá directamente el organizador de horarios.</div>`);
+        abrirOrganizador(state.resultadoSeleccionado);
+      });
+    });
+
+    list.querySelectorAll("[data-delete-combo]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (state.perfil?.rol !== "admin") return;
+        const ok = confirm("¿Seguro que desea eliminar esta combinación guardada?");
+        if (!ok) return;
+        try {
+          await deleteDoc(doc(db, "combinaciones", btn.dataset.deleteCombo));
+          await cargarGuardadas();
+        } catch (e) {
+          console.error(e);
+          alert("No fue posible eliminar la combinación.");
+        }
       });
     });
   } catch (e) {
     console.error(e);
     list.innerHTML = `<div class="notice error">No fue posible consultar las combinaciones guardadas.</div>`;
   }
+}
+
+
+/* =========================================================
+   ORGANIZADOR DE TIEMPOS
+   ========================================================= */
+
+function abrirOrganizador(combo) {
+  const piernas = (combo.piernasDetalle && combo.piernasDetalle.length)
+    ? combo.piernasDetalle.map((p, i) => ({
+        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${i}-${Math.random()}`,
+        tm: Number(p.tm),
+        tt: Number(p.tt),
+        tmMin: Number(p.tmMin ?? minutosPracticos(p.tm).slice(-1)[0]),
+        ttMin: Number(p.ttMin ?? minutosPracticos(p.tt).slice(-1)[0]),
+        inicioTT: p.inicioTT || "",
+        inicioTM: p.inicioTM || "",
+        finTM: p.finTM || "",
+        finTT: p.finTT || "",
+        observacion: p.observacion || "",
+        bloqueada: false
+      }))
+    : combo.tms.map((tm, i) => {
+        const tt = combo.tts[i];
+        const tmOps = minutosPracticos(tm);
+        const ttOps = minutosPracticos(tt);
+        return {
+          id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${i}-${Math.random()}`,
+          tm,
+          tt,
+          tmMin: tmOps[tmOps.length - 1],
+          ttMin: ttOps[ttOps.length - 1],
+          inicioTT: "",
+          inicioTM: "",
+          finTM: "",
+          finTT: "",
+          observacion: "",
+          bloqueada: false
+        };
+      });
+
+  state.organizador = {
+    tipo: combo.tipo,
+    tmTotal: combo.tmTotal,
+    ttTotal: combo.ttTotal,
+    restricciones: combo.restricciones || {activas:false,noIniciarAntes:null,noFinalizarDespues:null},
+    inicioGeneral: combo.inicioGeneral || piernas[0]?.inicioTT || "",
+    vueloOrigenId: combo.vueloOrigenId || null,
+    piernas
+  };
+
+  renderOrganizador();
+}
+
+function renderOrganizador() {
+  const o = state.organizador;
+  if (!o) return;
+
+  workspaceTitle.textContent = "Organizar tiempos";
+  workspace.classList.remove("hidden");
+
+  const r = o.restricciones || {};
+  const restriccionesTexto = !r.activas
+    ? "Sin restricciones"
+    : [
+        r.noIniciarAntes ? `No iniciar antes de ${r.noIniciarAntes}` : "",
+        r.noFinalizarDespues ? `No finalizar después de ${r.noFinalizarDespues}` : ""
+      ].filter(Boolean).join(" · ") || "Restricciones activadas";
+
+  workspaceContent.innerHTML = `
+    <section class="panel organizer-head">
+      <div class="organizer-title-row">
+        <div>
+          <span class="workspace-kicker">COMBINACIÓN SELECCIONADA</span>
+          <h4 class="panel-title">${NOMBRES_TIPO[o.tipo]} · TM ${fmt(o.tmTotal)} · TT ${fmt(o.ttTotal)}</h4>
+          <p class="panel-subtitle">${o.piernas.map(p => fmt(p.tm)).join(" + ")}</p>
+        </div>
+        <div class="organizer-head-actions">
+          <button id="btnVolverCalc" class="btn-secondary">VOLVER A CALCULADORA</button>
+          <button id="btnResumenFinal" class="btn-primary">VER RESUMEN</button>
+        </div>
+      </div>
+
+      <div class="organizer-settings">
+        <div class="field">
+          <label>INICIO TT PRIMERA PIERNA</label>
+          <input id="inicioGeneral" type="time" step="300" value="${o.inicioGeneral}">
+          <div class="field-help">Usted determina la hora inicial. El sistema organiza las demás.</div>
+        </div>
+        <div class="organizer-rule">
+          <span>INTERVALO AUTOMÁTICO</span>
+          <strong>10 MIN</strong>
+          <small>mínimo entre fin TT e inicio TT siguiente</small>
+        </div>
+        <div class="organizer-rule">
+          <span>RESTRICCIONES</span>
+          <strong>${restriccionesTexto}</strong>
+          <small>se validan sin impedir la edición manual</small>
+        </div>
+      </div>
+
+      <div id="validacionGeneral"></div>
+    </section>
+
+    <section class="panel" style="margin-top:18px">
+      <div class="organizer-instructions">
+        <div>
+          <h4 class="panel-title">Orden de piernas y horarios</h4>
+          <p class="panel-subtitle">Puede subir, bajar, bloquear o editar. Los cambios automáticos nunca modifican las piernas anteriores.</p>
+        </div>
+      </div>
+
+      <div id="legsContainer" class="legs-container"></div>
+    </section>
+
+    <section id="finalSummaryPanel" class="panel hidden" style="margin-top:18px"></section>
+  `;
+
+  $("inicioGeneral").addEventListener("change", () => {
+    o.inicioGeneral = $("inicioGeneral").value;
+    if (o.inicioGeneral) {
+      o.piernas[0].inicioTT = o.inicioGeneral;
+      recalcularDesde(0, true);
+    }
+    renderPiernas();
+  });
+
+  $("btnVolverCalc").addEventListener("click", renderCalculadora);
+  $("btnResumenFinal").addEventListener("click", mostrarResumenFinal);
+
+  renderPiernas();
+  setTimeout(() => workspace.scrollIntoView({behavior:"smooth",block:"start"}), 30);
+}
+
+function renderPiernas() {
+  const o = state.organizador;
+  const cont = $("legsContainer");
+  if (!o || !cont) return;
+
+  cont.innerHTML = o.piernas.map((p, i) => {
+    const tmOpts = minutosPracticos(p.tm);
+    const ttOpts = minutosPracticos(p.tt);
+    const errores = validarPierna(i);
+    const estado = errores.length ? "warn" : (p.inicioTT ? "ok" : "pending");
+    const estadoTexto = errores.length ? `${errores.length} alerta${errores.length === 1 ? "" : "s"}` : (p.inicioTT ? "Correcta" : "Pendiente");
+
+    return `
+      <article class="leg-card ${p.bloqueada ? "locked" : ""}" data-leg-id="${p.id}">
+        <div class="leg-top">
+          <div class="leg-number">${i + 1}</div>
+          <div class="leg-main">
+            <div class="leg-metrics">
+              <span>TM <strong>${fmt(p.tm)}</strong></span>
+              <span>TT <strong>${fmt(p.tt)}</strong></span>
+            </div>
+            <div class="leg-status ${estado}">${estadoTexto}</div>
+          </div>
+
+          <div class="leg-order-actions">
+            <button class="icon-btn" data-up="${i}" ${i===0 || p.bloqueada ? "disabled" : ""} title="Subir pierna">↑</button>
+            <button class="icon-btn" data-down="${i}" ${i===o.piernas.length-1 || p.bloqueada ? "disabled" : ""} title="Bajar pierna">↓</button>
+            <button class="icon-btn lock-btn" data-lock="${i}" title="${p.bloqueada ? "Desbloquear" : "Bloquear"}">${p.bloqueada ? "🔒" : "🔓"}</button>
+          </div>
+        </div>
+
+        <div class="duration-row">
+          <div class="field compact">
+            <label>DURACIÓN PRÁCTICA TT</label>
+            ${duracionControl(`ttDur-${i}`, ttOpts, p.ttMin)}
+          </div>
+          <div class="field compact">
+            <label>DURACIÓN PRÁCTICA TM</label>
+            ${duracionControl(`tmDur-${i}`, tmOpts, p.tmMin)}
+          </div>
+        </div>
+
+        <div class="time-grid">
+          ${timeControl(i, "inicioTT", "INICIO TT", p.inicioTT)}
+          ${timeControl(i, "inicioTM", "INICIO TM", p.inicioTM)}
+          ${timeControl(i, "finTM", "TÉRMINO TM", p.finTM)}
+          ${timeControl(i, "finTT", "TÉRMINO TT", p.finTT)}
+        </div>
+
+        <div class="field observation-field">
+          <label>OBSERVACIONES DE LA PIERNA</label>
+          <textarea data-observation-index="${i}" placeholder="Escriba libremente lo realizado en esta pierna...">${escapeHtml(p.observacion || "")}</textarea>
+        </div>
+
+        <div class="leg-actions">
+          <button class="btn-small" data-recalc="${i}">REORGANIZAR DESDE AQUÍ</button>
+          <button class="btn-small" data-auto="${i}">RESTABLECER AUTOMÁTICO</button>
+        </div>
+
+        ${errores.length ? `<div class="leg-errors">${errores.map(e => `<div>⚠ ${e}</div>`).join("")}</div>` : ""}
+      </article>
+    `;
+  }).join("");
+
+  enlazarPiernas();
+  renderValidacionGeneral();
+}
+
+function duracionControl(id, options, selected) {
+  if (options.length === 1) {
+    return `<div class="duration-static">${formatearMinutos(options[0])}</div>`;
+  }
+  return `<select id="${id}">
+    ${options.map(m => `<option value="${m}" ${m===selected ? "selected" : ""}>${formatearMinutos(m)}</option>`).join("")}
+  </select>`;
+}
+
+function timeControl(i, campo, label, value) {
+  return `
+    <div class="field compact">
+      <label>${label}</label>
+      <input type="time" step="300" data-time-index="${i}" data-time-field="${campo}" value="${value || ""}">
+    </div>
+  `;
+}
+
+function enlazarPiernas() {
+  const o = state.organizador;
+
+  document.querySelectorAll("[data-up]").forEach(btn => {
+    btn.addEventListener("click", () => moverPierna(Number(btn.dataset.up), -1));
+  });
+  document.querySelectorAll("[data-down]").forEach(btn => {
+    btn.addEventListener("click", () => moverPierna(Number(btn.dataset.down), 1));
+  });
+  document.querySelectorAll("[data-lock]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.lock);
+      o.piernas[i].bloqueada = !o.piernas[i].bloqueada;
+      renderPiernas();
+    });
+  });
+
+  document.querySelectorAll("[data-recalc]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.recalc);
+      recalcularDesde(i, true);
+      renderPiernas();
+    });
+  });
+
+  document.querySelectorAll("[data-auto]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.auto);
+      const p = o.piernas[i];
+      p.tmMin = minutosPracticos(p.tm).slice(-1)[0];
+      p.ttMin = minutosPracticos(p.tt).slice(-1)[0];
+      if (i === 0 && o.inicioGeneral) p.inicioTT = o.inicioGeneral;
+      recalcularDesde(i, true);
+      renderPiernas();
+    });
+  });
+
+  document.querySelectorAll("[data-observation-index]").forEach(textarea => {
+    textarea.addEventListener("input", () => {
+      const i = Number(textarea.dataset.observationIndex);
+      o.piernas[i].observacion = textarea.value;
+    });
+  });
+
+  document.querySelectorAll("[data-time-index]").forEach(input => {
+    input.addEventListener("change", () => {
+      const i = Number(input.dataset.timeIndex);
+      const campo = input.dataset.timeField;
+      const p = o.piernas[i];
+      p[campo] = input.value;
+
+      // Si se modifica Inicio TT, se reorganiza esa pierna y las siguientes.
+      // Las anteriores quedan intactas.
+      if (campo === "inicioTT" && input.value) {
+        if (i === 0) {
+          o.inicioGeneral = input.value;
+          $("inicioGeneral").value = input.value;
+        }
+        recalcularDesde(i, true);
+      }
+      renderPiernas();
+    });
+  });
+
+  o.piernas.forEach((p, i) => {
+    const ttSel = $(`ttDur-${i}`);
+    if (ttSel) {
+      ttSel.addEventListener("change", () => {
+        p.ttMin = Number(ttSel.value);
+        recalcularDesde(i, true);
+        renderPiernas();
+      });
+    }
+    const tmSel = $(`tmDur-${i}`);
+    if (tmSel) {
+      tmSel.addEventListener("change", () => {
+        p.tmMin = Number(tmSel.value);
+        recalcularDesde(i, true);
+        renderPiernas();
+      });
+    }
+  });
+}
+
+function moverPierna(index, delta) {
+  const o = state.organizador;
+  const target = index + delta;
+  if (target < 0 || target >= o.piernas.length) return;
+  if (o.piernas[index].bloqueada || o.piernas[target].bloqueada) return;
+
+  const inicioRecalc = Math.min(index, target);
+  [o.piernas[index], o.piernas[target]] = [o.piernas[target], o.piernas[index]];
+
+  if (inicioRecalc === 0 && o.inicioGeneral) {
+    o.piernas[0].inicioTT = o.inicioGeneral;
+  }
+  recalcularDesde(inicioRecalc, true);
+  renderPiernas();
+}
+
+function recalcularDesde(inicio, conservarInicioActual = true) {
+  const o = state.organizador;
+  if (!o) return;
+
+  for (let i = inicio; i < o.piernas.length; i++) {
+    const p = o.piernas[i];
+
+    // Una pierna bloqueada conserva todas sus horas.
+    if (p.bloqueada) continue;
+
+    let inicioTT;
+    if (i === 0) {
+      inicioTT = conservarInicioActual && p.inicioTT ? p.inicioTT : o.inicioGeneral;
+    } else if (i === inicio && conservarInicioActual && p.inicioTT) {
+      inicioTT = p.inicioTT;
+    } else {
+      const anterior = o.piernas[i - 1];
+      if (!anterior.finTT) {
+        limpiarHorasDesde(i);
+        return;
+      }
+      inicioTT = minutosAHora(horaAMinutos(anterior.finTT) + 10);
+    }
+
+    if (!inicioTT) {
+      limpiarHorasDesde(i);
+      return;
+    }
+
+    p.inicioTT = inicioTT;
+
+    const inicioMin = horaAMinutos(p.inicioTT);
+    const finTTMin = inicioMin + p.ttMin;
+
+    if (finTTMin >= 24 * 60) {
+      p.finTT = minutosAHora(finTTMin);
+    } else {
+      p.finTT = minutosAHora(finTTMin);
+    }
+
+    const espacio = Math.max(0, p.ttMin - p.tmMin);
+    let margenInicio = Math.round((espacio / 2) / 5) * 5;
+    margenInicio = Math.max(0, Math.min(espacio, margenInicio));
+
+    const inicioTMMin = inicioMin + margenInicio;
+    p.inicioTM = minutosAHora(inicioTMMin);
+    p.finTM = minutosAHora(inicioTMMin + p.tmMin);
+  }
+}
+
+function limpiarHorasDesde(inicio) {
+  const o = state.organizador;
+  for (let i = inicio; i < o.piernas.length; i++) {
+    if (o.piernas[i].bloqueada) continue;
+    o.piernas[i].inicioTT = "";
+    o.piernas[i].inicioTM = "";
+    o.piernas[i].finTM = "";
+    o.piernas[i].finTT = "";
+  }
+}
+
+function minutosPracticos(valor) {
+  const v10 = Math.round(Number(valor) * 10);
+  const base = Math.floor(Number(valor) * 12 + 1e-9) * 5;
+  const decima = ((v10 % 10) + 10) % 10;
+
+  // En .5 y en horas completas ustedes manejan dos posibilidades:
+  // ej. 0,5 => 25/30; 1,0 => 55/60; 1,5 => 85/90.
+  if ((decima === 5 || decima === 0) && base >= 5) {
+    return [base - 5, base];
+  }
+  return [base];
+}
+
+function horaAMinutos(hora) {
+  if (!hora || !/^\d{2}:\d{2}$/.test(hora)) return NaN;
+  const [h,m] = hora.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minutosAHora(minutos) {
+  let m = ((Math.round(minutos) % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(h).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+}
+
+function diferenciaMinutos(inicio, fin) {
+  const a = horaAMinutos(inicio);
+  const b = horaAMinutos(fin);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
+  return b >= a ? b - a : (1440 - a) + b;
+}
+
+function formatearMinutos(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (!h) return `${m} min`;
+  if (!m) return `${h} h`;
+  return `${h} h ${String(m).padStart(2,"0")} min`;
+}
+
+function validarPierna(i) {
+  const o = state.organizador;
+  const p = o.piernas[i];
+  const errores = [];
+
+  if (!p.inicioTT || !p.inicioTM || !p.finTM || !p.finTT) return errores;
+
+  const campos = [
+    ["Inicio TT", p.inicioTT],
+    ["Inicio TM", p.inicioTM],
+    ["Término TM", p.finTM],
+    ["Término TT", p.finTT]
+  ];
+
+  campos.forEach(([nombre,hora]) => {
+    const min = horaAMinutos(hora);
+    if (Number.isFinite(min) && min % 5 !== 0) {
+      errores.push(`${nombre} no está en intervalo de 5 minutos.`);
+    }
+  });
+
+  const durTT = diferenciaMinutos(p.inicioTT, p.finTT);
+  const durTM = diferenciaMinutos(p.inicioTM, p.finTM);
+  const ttPermitidos = minutosPracticos(p.tt);
+  const tmPermitidos = minutosPracticos(p.tm);
+
+  if (!ttPermitidos.includes(durTT)) {
+    errores.push(`Duración TT ${durTT} min no corresponde a TT ${fmt(p.tt)} (${ttPermitidos.map(formatearMinutos).join(" o ")}).`);
+  }
+  if (!tmPermitidos.includes(durTM)) {
+    errores.push(`Duración TM ${durTM} min no corresponde a TM ${fmt(p.tm)} (${tmPermitidos.map(formatearMinutos).join(" o ")}).`);
+  }
+
+  const baseTT = horaAMinutos(p.inicioTT);
+  const relInicioTM = diferenciaMinutos(p.inicioTT, p.inicioTM);
+  const relFinTM = diferenciaMinutos(p.inicioTT, p.finTM);
+
+  if (relInicioTM > durTT || relFinTM > durTT || diferenciaMinutos(p.inicioTM,p.finTM) > durTT) {
+    errores.push("El bloque TM quedó por fuera del TT.");
+  }
+
+  if (i > 0) {
+    const ant = o.piernas[i - 1];
+    if (ant.finTT && p.inicioTT) {
+      const intervalo = diferenciaMinutos(ant.finTT, p.inicioTT);
+      if (intervalo < 10) {
+        errores.push(`Intervalo con la pierna anterior: ${intervalo} min. Mínimo requerido: 10 min.`);
+      }
+    }
+  }
+
+  const r = o.restricciones || {};
+  if (r.activas && r.noIniciarAntes) {
+    if (horaAMinutos(p.inicioTT) < horaAMinutos(r.noIniciarAntes)) {
+      errores.push(`Inicio TT anterior a la restricción ${r.noIniciarAntes}.`);
+    }
+  }
+  if (r.activas && r.noFinalizarDespues) {
+    if (horaAMinutos(p.finTT) > horaAMinutos(r.noFinalizarDespues)) {
+      const exceso = horaAMinutos(p.finTT) - horaAMinutos(r.noFinalizarDespues);
+      errores.push(`Término TT excede ${r.noFinalizarDespues} en ${exceso} min.`);
+    }
+  }
+
+  return errores;
+}
+
+function renderValidacionGeneral() {
+  const cont = $("validacionGeneral");
+  const o = state.organizador;
+  if (!cont || !o) return;
+
+  const conHoras = o.piernas.filter(p => p.inicioTT && p.finTT).length;
+  if (!conHoras) {
+    cont.innerHTML = `<div class="notice info">Ingrese la hora de Inicio TT de la primera pierna para organizar automáticamente.</div>`;
+    return;
+  }
+
+  const errores = o.piernas.flatMap((_,i) => validarPierna(i).map(e => ({i,e})));
+
+  if (!errores.length && conHoras === o.piernas.length) {
+    cont.innerHTML = `<div class="notice ok"><b>✓ Organización válida.</b> Todos los tiempos cumplen las reglas actuales.</div>`;
+  } else if (errores.length) {
+    cont.innerHTML = `<div class="notice warn"><b>⚠ ${errores.length} inconsistencia${errores.length===1?"":"s"}.</b> Revise las piernas marcadas.</div>`;
+  } else {
+    cont.innerHTML = `<div class="notice info">Organización incompleta. Faltan horarios por calcular.</div>`;
+  }
+}
+
+function mostrarResumenFinal() {
+  const o = state.organizador;
+  const panel = $("finalSummaryPanel");
+  if (!o || !panel) return;
+
+  const errores = o.piernas.flatMap((_,i) => validarPierna(i));
+  const completas = o.piernas.every(p => p.inicioTT && p.inicioTM && p.finTM && p.finTT);
+
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="results-toolbar">
+      <div>
+        <h4>Resumen final</h4>
+        <span class="results-count">${NOMBRES_TIPO[o.tipo]} · TM ${fmt(o.tmTotal)} · TT ${fmt(o.ttTotal)}</span>
+      </div>
+      <div class="summary-actions">
+        <button id="btnGuardarVuelo" class="btn-secondary">GUARDAR VUELO</button>
+        <button id="btnCopiarResumen" class="btn-primary">COPIAR DATOS</button>
+      </div>
+    </div>
+
+    ${!completas ? `<div class="notice warn">La organización todavía está incompleta.</div>` : ""}
+    ${errores.length ? `<div class="notice warn">Hay ${errores.length} inconsistencia${errores.length===1?"":"s"}. Puede revisar el resumen, pero conviene corregirlas antes de usarlo.</div>` : `<div class="notice ok">✓ Organización válida.</div>`}
+
+    <div class="results-wrap" style="margin-top:14px">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>PIERNA</th><th>TM</th><th>TT</th><th>INICIO TT</th>
+            <th>INICIO TM</th><th>TÉRMINO TM</th><th>TÉRMINO TT</th><th>OBSERVACIONES</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${o.piernas.map((p,i) => `
+            <tr>
+              <td>${i+1}</td><td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
+              <td>${p.inicioTT || "—"}</td><td>${p.inicioTM || "—"}</td>
+              <td>${p.finTM || "—"}</td><td>${p.finTT || "—"}</td>
+              <td class="observation-cell">${escapeHtml(p.observacion || "—")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $("btnCopiarResumen").addEventListener("click", copiarResumen);
+  $("btnGuardarVuelo").addEventListener("click", guardarVueloCompleto);
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function copiarResumen() {
+  const o = state.organizador;
+  const lineas = [
+    `TIPO: ${NOMBRES_TIPO[o.tipo]}`,
+    `TM TOTAL: ${fmt(o.tmTotal)}`,
+    `TT TOTAL: ${fmt(o.ttTotal)}`,
+    ""
+  ];
+
+  o.piernas.forEach((p,i) => {
+    lineas.push(
+      `PIERNA ${i+1} | TM ${fmt(p.tm)} | TT ${fmt(p.tt)} | Inicio TT ${p.inicioTT || "—"} | Inicio TM ${p.inicioTM || "—"} | Término TM ${p.finTM || "—"} | Término TT ${p.finTT || "—"} | Observaciones: ${p.observacion || "—"}`
+    );
+  });
+
+  try {
+    await navigator.clipboard.writeText(lineas.join("\n"));
+    const btn = $("btnCopiarResumen");
+    if (btn) {
+      const t = btn.textContent;
+      btn.textContent = "COPIADO";
+      setTimeout(() => btn.textContent = t, 1500);
+    }
+  } catch {
+    alert("No fue posible copiar automáticamente. Puede seleccionar los datos del resumen.");
+  }
+}
+
+
+
+/* =========================================================
+   V5 · VUELOS GUARDADOS / OBSERVACIONES / ELIMINAR
+   ========================================================= */
+
+async function guardarVueloCompleto() {
+  const o = state.organizador;
+  if (!o || !state.perfil) return;
+
+  const completas = o.piernas.every(p => p.inicioTT && p.inicioTM && p.finTM && p.finTT);
+  const errores = o.piernas.flatMap((_, i) => validarPierna(i));
+
+  if (!completas) {
+    alert("La organización está incompleta. Complete todas las horas antes de guardar el vuelo.");
+    return;
+  }
+
+  if (errores.length) {
+    const continuar = confirm(`La organización tiene ${errores.length} inconsistencia(s). ¿Desea guardarla de todas formas?`);
+    if (!continuar) return;
+  }
+
+  const btn = $("btnGuardarVuelo");
+  const original = btn?.textContent || "GUARDAR VUELO";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "GUARDANDO...";
+  }
+
+  try {
+    const ref = await addDoc(collection(db, "vuelos"), {
+      tipo: o.tipo,
+      tipoNombre: NOMBRES_TIPO[o.tipo],
+      tmTotal: o.tmTotal,
+      ttTotal: o.ttTotal,
+      inicioGeneral: o.inicioGeneral || o.piernas[0]?.inicioTT || "",
+      restricciones: o.restricciones || {activas:false,noIniciarAntes:null,noFinalizarDespues:null},
+      valido: errores.length === 0,
+      numeroInconsistencias: errores.length,
+      piernas: o.piernas.map((p, i) => ({
+        numero: i + 1,
+        tm: p.tm,
+        tt: p.tt,
+        tmMin: p.tmMin,
+        ttMin: p.ttMin,
+        inicioTT: p.inicioTT,
+        inicioTM: p.inicioTM,
+        finTM: p.finTM,
+        finTT: p.finTT,
+        observacion: p.observacion || ""
+      })),
+      creadoPorUid: state.perfil.uid,
+      creadoPorCorreo: state.perfil.correo,
+      creadoPorNombre: state.perfil.nombre || "",
+      creadoEn: serverTimestamp()
+    });
+
+    o.vueloOrigenId = ref.id;
+    if (btn) btn.textContent = "VUELO GUARDADO";
+    setTimeout(() => {
+      if (btn) {
+        btn.textContent = original;
+        btn.disabled = false;
+      }
+    }, 1800);
+  } catch (e) {
+    console.error(e);
+    if (btn) {
+      btn.textContent = "ERROR";
+      btn.disabled = false;
+    }
+    alert("No fue posible guardar el vuelo. Revise las reglas de Firestore.");
+  }
+}
+
+async function renderVuelosGuardados() {
+  workspaceTitle.textContent = "Vuelos guardados";
+  workspaceContent.innerHTML = `
+    <section class="panel">
+      <h4 class="panel-title">Historial de vuelos organizados</h4>
+      <p class="panel-subtitle">Aquí se conserva el resumen completo: orden, TM/TT, horarios y observaciones de cada pierna.</p>
+
+      <div class="saved-filters">
+        <div class="field">
+          <label>TIPO</label>
+          <select id="flightTipo">
+            <option value="">Todos</option>
+            <option value="operaciones">Operaciones</option>
+            <option value="entrenamiento">Entrenamiento</option>
+            <option value="mantenimiento">Mantenimiento</option>
+          </select>
+        </div>
+        <div class="field"><label>TM TOTAL</label><input id="flightTM" type="number" step="0.1" placeholder="Ej. 4.3"></div>
+        <div class="field"><label>TT TOTAL</label><input id="flightTT" type="number" step="0.1" placeholder="Ej. 8.0"></div>
+        <button id="btnBuscarVuelos" class="btn-primary">BUSCAR</button>
+      </div>
+
+      <div id="flightsList"><div class="empty-state">Cargando vuelos...</div></div>
+    </section>
+  `;
+
+  $("btnBuscarVuelos").addEventListener("click", cargarVuelosGuardados);
+  await cargarVuelosGuardados();
+}
+
+async function cargarVuelosGuardados() {
+  const list = $("flightsList");
+  if (!list) return;
+  list.innerHTML = `<div class="empty-state">Consultando...</div>`;
+
+  try {
+    const snap = await getDocs(collection(db, "vuelos"));
+    let items = snap.docs.map(d => ({id:d.id, ...d.data()}));
+
+    const tipo = $("flightTipo").value;
+    const tm = parseFloat($("flightTM").value);
+    const tt = parseFloat($("flightTT").value);
+
+    if (tipo) items = items.filter(x => x.tipo === tipo);
+    if (Number.isFinite(tm)) items = items.filter(x => Math.abs(Number(x.tmTotal) - tm) < .001);
+    if (Number.isFinite(tt)) items = items.filter(x => Math.abs(Number(x.ttTotal) - tt) < .001);
+
+    items.sort((a,b) => timestampMillis(b.creadoEn) - timestampMillis(a.creadoEn));
+
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state">No hay vuelos guardados para esos criterios.</div>`;
+      return;
+    }
+
+    list.innerHTML = items.map((x,i) => {
+      const fecha = formatearTimestamp(x.creadoEn);
+      const obs = (x.piernas || []).filter(p => p.observacion).length;
+      return `
+        <div class="flight-card">
+          <div class="flight-card-main">
+            <div class="flight-badges">
+              <span class="flight-badge">${escapeHtml(x.tipoNombre || NOMBRES_TIPO[x.tipo] || x.tipo)}</span>
+              <span class="flight-badge ${x.valido === false ? "bad" : "good"}">${x.valido === false ? "CON ALERTAS" : "VÁLIDO"}</span>
+            </div>
+            <h4>TM ${fmt(x.tmTotal)} · TT ${fmt(x.ttTotal)} · ${(x.piernas || []).length} piernas</h4>
+            <p>${fecha}${x.creadoPorNombre ? ` · ${escapeHtml(x.creadoPorNombre)}` : ""}</p>
+            <p>${obs} pierna${obs===1?"":"s"} con observaciones</p>
+          </div>
+          <div class="saved-actions">
+            <button class="btn-small" data-view-flight="${i}">VER RESUMEN</button>
+            <button class="btn-small" data-duplicate-flight="${i}">DUPLICAR / USAR COMO BASE</button>
+            ${state.perfil?.rol === "admin" ? `<button class="btn-danger" data-delete-flight="${x.id}">ELIMINAR</button>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll("[data-view-flight]").forEach(btn => {
+      btn.addEventListener("click", () => mostrarVueloGuardado(items[Number(btn.dataset.viewFlight)]));
+    });
+
+    list.querySelectorAll("[data-duplicate-flight]").forEach(btn => {
+      btn.addEventListener("click", () => usarVueloComoBase(items[Number(btn.dataset.duplicateFlight)]));
+    });
+
+    list.querySelectorAll("[data-delete-flight]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (state.perfil?.rol !== "admin") return;
+        if (!confirm("¿Seguro que desea eliminar este vuelo guardado? Esta acción no se puede deshacer.")) return;
+        try {
+          await deleteDoc(doc(db, "vuelos", btn.dataset.deleteFlight));
+          await cargarVuelosGuardados();
+        } catch (e) {
+          console.error(e);
+          alert("No fue posible eliminar el vuelo.");
+        }
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = `<div class="notice error">No fue posible consultar los vuelos guardados. Revise las reglas de Firestore.</div>`;
+  }
+}
+
+function mostrarVueloGuardado(vuelo) {
+  const list = $("flightsList");
+  if (!list) return;
+
+  const r = vuelo.restricciones || {};
+  const restricciones = !r.activas
+    ? "Sin restricciones"
+    : [
+        r.noIniciarAntes ? `No iniciar antes de ${r.noIniciarAntes}` : "",
+        r.noFinalizarDespues ? `No finalizar después de ${r.noFinalizarDespues}` : ""
+      ].filter(Boolean).join(" · ") || "Restricciones activas";
+
+  const id = `flight-detail-${vuelo.id}`;
+  document.getElementById(id)?.remove();
+
+  list.insertAdjacentHTML("afterbegin", `
+    <section id="${id}" class="flight-detail">
+      <div class="results-toolbar">
+        <div>
+          <h4>Resumen guardado</h4>
+          <span class="results-count">${escapeHtml(vuelo.tipoNombre || NOMBRES_TIPO[vuelo.tipo] || vuelo.tipo)} · TM ${fmt(vuelo.tmTotal)} · TT ${fmt(vuelo.ttTotal)}</span>
+        </div>
+        <button class="btn-outline" data-close-flight-detail="${id}">CERRAR RESUMEN</button>
+      </div>
+
+      <div class="notice ${vuelo.valido === false ? "warn" : "ok"}">
+        ${vuelo.valido === false ? `Guardado con ${vuelo.numeroInconsistencias || 0} inconsistencia(s).` : "✓ Organización guardada como válida."}
+        · ${escapeHtml(restricciones)}
+      </div>
+
+      <div class="results-wrap" style="margin-top:14px">
+        <table class="results-table">
+          <thead>
+            <tr><th>PIERNA</th><th>TM</th><th>TT</th><th>INICIO TT</th><th>INICIO TM</th><th>TÉRMINO TM</th><th>TÉRMINO TT</th><th>OBSERVACIONES</th></tr>
+          </thead>
+          <tbody>
+            ${(vuelo.piernas || []).map((p,i) => `
+              <tr>
+                <td>${i+1}</td><td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
+                <td>${escapeHtml(p.inicioTT || "—")}</td><td>${escapeHtml(p.inicioTM || "—")}</td>
+                <td>${escapeHtml(p.finTM || "—")}</td><td>${escapeHtml(p.finTT || "—")}</td>
+                <td class="observation-cell">${escapeHtml(p.observacion || "—")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `);
+
+  list.querySelector(`[data-close-flight-detail="${id}"]`)?.addEventListener("click", () => {
+    document.getElementById(id)?.remove();
+  });
+}
+
+function usarVueloComoBase(vuelo) {
+  const detalle = (vuelo.piernas || []).map(p => ({
+    tm: Number(p.tm),
+    tt: Number(p.tt),
+    tmMin: Number(p.tmMin),
+    ttMin: Number(p.ttMin),
+    inicioTT: p.inicioTT || "",
+    inicioTM: p.inicioTM || "",
+    finTM: p.finTM || "",
+    finTT: p.finTT || "",
+    observacion: p.observacion || ""
+  }));
+
+  abrirOrganizador({
+    tipo: vuelo.tipo,
+    tmTotal: Number(vuelo.tmTotal),
+    ttTotal: Number(vuelo.ttTotal),
+    tms: detalle.map(p => p.tm),
+    tts: detalle.map(p => p.tt),
+    piernasDetalle: detalle,
+    inicioGeneral: vuelo.inicioGeneral || detalle[0]?.inicioTT || "",
+    restricciones: vuelo.restricciones || {activas:false,noIniciarAntes:null,noFinalizarDespues:null},
+    vueloOrigenId: vuelo.id
+  });
+}
+
+function timestampMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (typeof ts.seconds === "number") return ts.seconds * 1000;
+  return 0;
+}
+
+function formatearTimestamp(ts) {
+  const ms = timestampMillis(ts);
+  if (!ms) return "Fecha no disponible";
+  return new Date(ms).toLocaleString("es-CO", {
+    year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit", hour12:false
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 function fmt(v) {
