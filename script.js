@@ -292,7 +292,7 @@ function renderCalculadora() {
             <span>No iniciar antes de</span>
           </label>
           <div class="field restriction-time">
-            <input id="horaInicioMin" type="time" disabled>
+            <input id="horaInicioMin" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" disabled>
           </div>
 
           <label class="check-row">
@@ -300,7 +300,7 @@ function renderCalculadora() {
             <span>No finalizar después de</span>
           </label>
           <div class="field restriction-time">
-            <input id="horaFinMax" type="time" disabled>
+            <input id="horaFinMax" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" disabled>
           </div>
         </div>
 
@@ -360,6 +360,17 @@ function enlazarCalculadora() {
   document.querySelectorAll('input[name="restriccionModo"]').forEach(el => el.addEventListener("change", actualizarRestricciones));
   $("usarInicioMin").addEventListener("change", e => $("horaInicioMin").disabled = !e.target.checked);
   $("usarFinMax").addEventListener("change", e => $("horaFinMax").disabled = !e.target.checked);
+  ["horaInicioMin","horaFinMax"].forEach(id => {
+    $(id).addEventListener("blur", () => {
+      const normal = normalizarHora24($(id).value);
+      if (!normal && $(id).value.trim()) {
+        $(id).classList.add("invalid-time");
+      } else {
+        $(id).classList.remove("invalid-time");
+        $(id).value = normal || "";
+      }
+    });
+  });
   $("btnGenerar").addEventListener("click", generarDesdeFormulario);
   $("btnLimpiarCalc").addEventListener("click", renderCalculadora);
   $("btnAgregarFiltro").addEventListener("click", agregarFiltro);
@@ -878,61 +889,311 @@ function renderOrganizador() {
           <h4 class="panel-title">${NOMBRES_TIPO[o.tipo]} · TM ${fmt(o.tmTotal)} · TT ${fmt(o.ttTotal)}</h4>
           <p class="panel-subtitle">${o.piernas.map(p => fmt(p.tm)).join(" + ")}</p>
         </div>
+
         <div class="organizer-head-actions">
           <button id="btnVolverCalc" class="btn-secondary">VOLVER A CALCULADORA</button>
-          <button id="btnResumenFinal" class="btn-primary">VER RESUMEN</button>
+          <button id="btnModoAvanzado" class="btn-secondary">MODO AVANZADO</button>
         </div>
       </div>
 
-      <div class="organizer-settings">
+      <div class="organizer-settings simplified-settings">
         <div class="field">
-          <label>INICIO TT PRIMERA PIERNA</label>
-          <input id="inicioGeneral" type="time" step="300" value="${o.inicioGeneral}">
-          <div class="field-help">Usted determina la hora inicial. El sistema organiza las demás.</div>
+          <label>INICIO TT PRIMERA PIERNA · FORMATO 24 HORAS</label>
+          <input id="inicioGeneral" class="time24-input" type="text" inputmode="numeric" maxlength="5"
+                 placeholder="HH:MM · Ej. 13:00" value="${escapeHtml(o.inicioGeneral || "")}">
+          <div class="field-help">Escriba 1300 o 13:00. El sistema lo dejará como 13:00.</div>
         </div>
+
         <div class="organizer-rule">
           <span>INTERVALO AUTOMÁTICO</span>
           <strong>10 MIN</strong>
-          <small>mínimo entre fin TT e inicio TT siguiente</small>
+          <small>mínimo entre una pierna y la siguiente</small>
         </div>
+
         <div class="organizer-rule">
           <span>RESTRICCIONES</span>
-          <strong>${restriccionesTexto}</strong>
-          <small>se validan sin impedir la edición manual</small>
+          <strong>${escapeHtml(restriccionesTexto)}</strong>
+          <small>se validan automáticamente</small>
         </div>
       </div>
 
       <div id="validacionGeneral"></div>
     </section>
 
-    <section class="panel" style="margin-top:18px">
-      <div class="organizer-instructions">
+    <section class="panel simple-editor-panel" style="margin-top:18px">
+      <div class="simple-editor-header">
         <div>
-          <h4 class="panel-title">Orden de piernas y horarios</h4>
-          <p class="panel-subtitle">Puede subir, bajar, bloquear o editar. Los cambios automáticos nunca modifican las piernas anteriores.</p>
+          <h4 class="panel-title">Organización del vuelo</h4>
+          <p class="panel-subtitle">
+            Edite directamente aquí ruta, horas y observaciones. Use ↑ ↓ para ordenar, 🔒 para bloquear y ↻ para reorganizar desde una pierna.
+          </p>
+        </div>
+        <div class="summary-actions">
+          <button id="btnGuardarVueloDirecto" class="btn-secondary">GUARDAR VUELO</button>
+          <button id="btnCopiarDirecto" class="btn-secondary">COPIAR DATOS</button>
+          <button id="btnVistaLimpia" class="btn-primary">VISTA LIMPIA</button>
         </div>
       </div>
 
+      <div id="simpleTableContainer"></div>
+    </section>
+
+    <section id="advancedOrganizerPanel" class="panel hidden" style="margin-top:18px">
+      <div class="organizer-instructions">
+        <div>
+          <h4 class="panel-title">Modo avanzado</h4>
+          <p class="panel-subtitle">Controles detallados por pierna. La tabla principal y este modo trabajan sobre los mismos datos.</p>
+        </div>
+      </div>
       <div id="legsContainer" class="legs-container"></div>
     </section>
 
     <section id="finalSummaryPanel" class="panel hidden" style="margin-top:18px"></section>
   `;
 
-  $("inicioGeneral").addEventListener("change", () => {
-    o.inicioGeneral = $("inicioGeneral").value;
-    if (o.inicioGeneral) {
-      o.piernas[0].inicioTT = o.inicioGeneral;
+  $("inicioGeneral").addEventListener("blur", () => {
+    const normal = normalizarHora24($("inicioGeneral").value);
+    if (!normal && $("inicioGeneral").value.trim()) {
+      $("inicioGeneral").classList.add("invalid-time");
+      return;
+    }
+    $("inicioGeneral").classList.remove("invalid-time");
+    $("inicioGeneral").value = normal || "";
+    o.inicioGeneral = normal || "";
+    if (normal) {
+      o.piernas[0].inicioTT = normal;
       recalcularDesde(0, true);
     }
-    renderPiernas();
+    renderTablaSimple();
+    if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
+  });
+
+  $("inicioGeneral").addEventListener("keydown", e => {
+    if (e.key === "Enter") e.target.blur();
   });
 
   $("btnVolverCalc").addEventListener("click", renderCalculadora);
-  $("btnResumenFinal").addEventListener("click", mostrarResumenFinal);
 
-  renderPiernas();
-  setTimeout(() => workspace.scrollIntoView({behavior:"smooth",block:"start"}), 30);
+  $("btnModoAvanzado").addEventListener("click", () => {
+    const panel = $("advancedOrganizerPanel");
+    const abrir = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !abrir);
+    $("btnModoAvanzado").textContent = abrir ? "OCULTAR AVANZADO" : "MODO AVANZADO";
+    if (abrir) renderPiernas();
+  });
+
+  $("btnVistaLimpia").addEventListener("click", mostrarResumenFinal);
+  $("btnGuardarVueloDirecto").addEventListener("click", guardarVueloCompleto);
+  $("btnCopiarDirecto").addEventListener("click", copiarResumen);
+
+  renderTablaSimple();
+  setTimeout(() => workspace.scrollIntoView({behavior:"smooth", block:"start"}), 30);
+}
+
+function renderTablaSimple() {
+  const o = state.organizador;
+  const cont = $("simpleTableContainer");
+  if (!o || !cont) return;
+
+  cont.innerHTML = `
+    <div class="simple-table-wrap">
+      <table class="simple-editor-table">
+        <thead>
+          <tr>
+            <th>PIERNA</th>
+            <th>RUTA</th>
+            <th>TM</th>
+            <th>TT</th>
+            <th>INICIO TT</th>
+            <th>INICIO TM</th>
+            <th>TÉRMINO TM</th>
+            <th>TÉRMINO TT</th>
+            <th>OBSERVACIONES</th>
+            <th>ACCIONES</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${o.piernas.map((p,i) => {
+            const errores = validarPierna(i);
+            const tmOpts = minutosPracticos(p.tm);
+            const ttOpts = minutosPracticos(p.tt);
+
+            return `
+              <tr class="${errores.length ? "row-warning" : (p.inicioTT ? "row-ok" : "")}">
+                <td>
+                  <div class="simple-leg-number">${i+1}</div>
+                  <div class="simple-order">
+                    <button class="mini-icon" data-simple-up="${i}" ${i===0 || p.bloqueada ? "disabled" : ""}>↑</button>
+                    <button class="mini-icon" data-simple-down="${i}" ${i===o.piernas.length-1 || p.bloqueada ? "disabled" : ""}>↓</button>
+                  </div>
+                </td>
+
+                <td>
+                  <div class="simple-route">
+                    <input type="text" data-simple-route="${i}" data-route-field="rutaDe"
+                           value="${escapeHtml(p.rutaDe || "")}" placeholder="DE">
+                    <span>→</span>
+                    <input type="text" data-simple-route="${i}" data-route-field="rutaA"
+                           value="${escapeHtml(p.rutaA || "")}" placeholder="A">
+                  </div>
+                </td>
+
+                <td>
+                  <strong class="simple-metric">${fmt(p.tm)}</strong>
+                  ${durationSelectSimple(`simpleTmDur-${i}`, tmOpts, p.tmMin)}
+                </td>
+
+                <td>
+                  <strong class="simple-metric">${fmt(p.tt)}</strong>
+                  ${durationSelectSimple(`simpleTtDur-${i}`, ttOpts, p.ttMin)}
+                </td>
+
+                ${simpleTimeCell(i,"inicioTT",p.inicioTT)}
+                ${simpleTimeCell(i,"inicioTM",p.inicioTM)}
+                ${simpleTimeCell(i,"finTM",p.finTM)}
+                ${simpleTimeCell(i,"finTT",p.finTT)}
+
+                <td>
+                  <textarea class="simple-observation" data-simple-observation="${i}"
+                            placeholder="Escriba lo realizado...">${escapeHtml(p.observacion || "")}</textarea>
+                </td>
+
+                <td>
+                  <div class="simple-actions">
+                    <button class="mini-icon" data-simple-lock="${i}" title="${p.bloqueada ? "Desbloquear" : "Bloquear"}">${p.bloqueada ? "🔒" : "🔓"}</button>
+                    <button class="mini-icon" data-simple-recalc="${i}" title="Reorganizar desde aquí">↻</button>
+                  </div>
+                  ${errores.length ? `<div class="simple-alert" title="${escapeHtml(errores.join(" | "))}">⚠ ${errores.length}</div>` : `<div class="simple-valid">✓</div>`}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  enlazarTablaSimple();
+  renderValidacionGeneral();
+}
+
+function simpleTimeCell(i, campo, valor) {
+  return `
+    <td>
+      <input class="simple-time time24-input" type="text" inputmode="numeric" maxlength="5"
+             data-simple-time="${i}" data-time-field="${campo}"
+             value="${escapeHtml(valor || "")}" placeholder="HH:MM">
+    </td>
+  `;
+}
+
+function durationSelectSimple(id, options, selected) {
+  if (options.length === 1) {
+    return `<div class="simple-duration">${formatearMinutos(options[0])}</div>`;
+  }
+  return `
+    <select class="simple-duration-select" id="${id}">
+      ${options.map(m => `<option value="${m}" ${m===selected ? "selected" : ""}>${formatearMinutos(m)}</option>`).join("")}
+    </select>
+  `;
+}
+
+function enlazarTablaSimple() {
+  const o = state.organizador;
+  if (!o) return;
+
+  document.querySelectorAll("[data-simple-route]").forEach(input => {
+    input.addEventListener("input", () => {
+      const i = Number(input.dataset.simpleRoute);
+      o.piernas[i][input.dataset.routeField] = input.value;
+    });
+  });
+
+  document.querySelectorAll("[data-simple-observation]").forEach(area => {
+    area.addEventListener("input", () => {
+      o.piernas[Number(area.dataset.simpleObservation)].observacion = area.value;
+    });
+  });
+
+  document.querySelectorAll("[data-simple-time]").forEach(input => {
+    input.addEventListener("blur", () => {
+      const i = Number(input.dataset.simpleTime);
+      const campo = input.dataset.timeField;
+      const normal = normalizarHora24(input.value);
+
+      if (!normal && input.value.trim()) {
+        input.classList.add("invalid-time");
+        return;
+      }
+
+      input.classList.remove("invalid-time");
+      input.value = normal || "";
+      o.piernas[i][campo] = normal || "";
+
+      // Solo Inicio TT dispara organización automática.
+      // El resto queda exactamente como el usuario lo escriba y se valida.
+      if (campo === "inicioTT" && normal) {
+        if (i === 0) {
+          o.inicioGeneral = normal;
+          if ($("inicioGeneral")) $("inicioGeneral").value = normal;
+        }
+        recalcularDesde(i, true);
+      }
+
+      renderTablaSimple();
+      if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
+    });
+
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") e.target.blur();
+    });
+  });
+
+  document.querySelectorAll("[data-simple-up]").forEach(btn => {
+    btn.addEventListener("click", () => moverPierna(Number(btn.dataset.simpleUp), -1));
+  });
+
+  document.querySelectorAll("[data-simple-down]").forEach(btn => {
+    btn.addEventListener("click", () => moverPierna(Number(btn.dataset.simpleDown), 1));
+  });
+
+  document.querySelectorAll("[data-simple-lock]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.simpleLock);
+      o.piernas[i].bloqueada = !o.piernas[i].bloqueada;
+      renderTablaSimple();
+      if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
+    });
+  });
+
+  document.querySelectorAll("[data-simple-recalc]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.simpleRecalc);
+      recalcularDesde(i, true);
+      renderTablaSimple();
+      if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
+    });
+  });
+
+  o.piernas.forEach((p,i) => {
+    const tmSel = $(`simpleTmDur-${i}`);
+    if (tmSel) {
+      tmSel.addEventListener("change", () => {
+        p.tmMin = Number(tmSel.value);
+        recalcularDesde(i, true);
+        renderTablaSimple();
+      });
+    }
+
+    const ttSel = $(`simpleTtDur-${i}`);
+    if (ttSel) {
+      ttSel.addEventListener("change", () => {
+        p.ttMin = Number(ttSel.value);
+        recalcularDesde(i, true);
+        renderTablaSimple();
+      });
+    }
+  });
 }
 
 function renderPiernas() {
@@ -1034,7 +1295,8 @@ function timeControl(i, campo, label, value) {
   return `
     <div class="field compact">
       <label>${label}</label>
-      <input type="time" step="300" data-time-index="${i}" data-time-field="${campo}" value="${value || ""}">
+      <input class="time24-input" type="text" inputmode="numeric" maxlength="5"
+             data-time-index="${i}" data-time-field="${campo}" value="${value || ""}" placeholder="HH:MM">
     </div>
   `;
 }
@@ -1092,22 +1354,35 @@ function enlazarPiernas() {
   });
 
   document.querySelectorAll("[data-time-index]").forEach(input => {
-    input.addEventListener("change", () => {
+    input.addEventListener("blur", () => {
       const i = Number(input.dataset.timeIndex);
       const campo = input.dataset.timeField;
       const p = o.piernas[i];
-      p[campo] = input.value;
+      const normal = normalizarHora24(input.value);
 
-      // Si se modifica Inicio TT, se reorganiza esa pierna y las siguientes.
-      // Las anteriores quedan intactas.
-      if (campo === "inicioTT" && input.value) {
+      if (!normal && input.value.trim()) {
+        input.classList.add("invalid-time");
+        return;
+      }
+
+      input.classList.remove("invalid-time");
+      input.value = normal || "";
+      p[campo] = normal || "";
+
+      if (campo === "inicioTT" && normal) {
         if (i === 0) {
-          o.inicioGeneral = input.value;
-          $("inicioGeneral").value = input.value;
+          o.inicioGeneral = normal;
+          $("inicioGeneral").value = normal;
         }
         recalcularDesde(i, true);
       }
+
       renderPiernas();
+      renderTablaSimple();
+    });
+
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") e.target.blur();
     });
   });
 
@@ -1144,7 +1419,10 @@ function moverPierna(index, delta) {
     o.piernas[0].inicioTT = o.inicioGeneral;
   }
   recalcularDesde(inicioRecalc, true);
-  renderPiernas();
+  renderTablaSimple();
+  if ($("advancedOrganizerPanel") && !$("advancedOrganizerPanel").classList.contains("hidden")) {
+    renderPiernas();
+  }
 }
 
 function recalcularDesde(inicio, conservarInicioActual = true) {
@@ -1219,6 +1497,32 @@ function minutosPracticos(valor) {
     return [base - 5, base];
   }
   return [base];
+}
+
+function normalizarHora24(valor) {
+  let v = String(valor || "").trim().replace(/\s+/g,"");
+  if (!v) return "";
+
+  // Permite escribir 8, 800, 08:00, 1300, 13:00.
+  if (/^\d{1,2}$/.test(v)) {
+    const h = Number(v);
+    if (h >= 0 && h <= 23) return `${String(h).padStart(2,"0")}:00`;
+    return null;
+  }
+
+  if (/^\d{3,4}$/.test(v)) {
+    v = v.padStart(4,"0");
+    v = `${v.slice(0,2)}:${v.slice(2)}`;
+  }
+
+  const m = v.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+
+  return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
 }
 
 function horaAMinutos(hora) {
@@ -1350,7 +1654,7 @@ function mostrarResumenFinal() {
   panel.innerHTML = `
     <div class="results-toolbar">
       <div>
-        <h4>Resumen final</h4>
+        <h4>Vista limpia</h4>
         <span class="results-count">${NOMBRES_TIPO[o.tipo]} · TM ${fmt(o.tmTotal)} · TT ${fmt(o.ttTotal)}</span>
       </div>
       <div class="summary-actions">
