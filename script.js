@@ -1,9 +1,9 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, deleteDoc, serverTimestamp
+  getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -201,8 +201,8 @@ function abrirModulo(modulo) {
   if (modulo === "calculadora") renderCalculadora();
   else if (modulo === "guardadas") renderGuardadas();
   else if (modulo === "vuelos") renderVuelosGuardados();
-  else if (modulo === "usuarios") renderPlaceholder("Administrar usuarios", "Este módulo será el siguiente bloque administrativo que construiremos.");
-  else if (modulo === "accesos") renderPlaceholder("Registro de accesos", "Los accesos ya se están registrando. En la siguiente versión haremos la consulta visual para administradores.");
+  else if (modulo === "usuarios") renderAdministrarUsuarios();
+  else if (modulo === "accesos") renderRegistroAccesos();
 
   setTimeout(() => workspace.scrollIntoView({behavior:"smooth", block:"start"}), 30);
 }
@@ -1418,6 +1418,319 @@ async function copiarResumen() {
   }
 }
 
+
+
+
+/* =========================================================
+   V7 · ADMINISTRACIÓN DE USUARIOS Y REGISTRO DE ACCESOS
+   ========================================================= */
+
+async function renderAdministrarUsuarios() {
+  if (state.perfil?.rol !== "admin") {
+    renderPlaceholder("Acceso restringido", "Este módulo está disponible únicamente para administradores.");
+    return;
+  }
+
+  workspaceTitle.textContent = "Administrar usuarios";
+  workspaceContent.innerHTML = `
+    <section class="panel">
+      <h4 class="panel-title">Crear usuario autorizado</h4>
+      <p class="panel-subtitle">La cédula se utiliza únicamente como credencial de acceso. No se guarda en Firestore.</p>
+
+      <div class="admin-user-form">
+        <div class="field">
+          <label>NOMBRE</label>
+          <input id="newUserName" type="text" placeholder="Nombre del usuario">
+        </div>
+        <div class="field">
+          <label>CORREO</label>
+          <input id="newUserEmail" type="email" placeholder="correo@dominio.mil.co">
+        </div>
+        <div class="field">
+          <label>CÉDULA</label>
+          <input id="newUserCedula" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Número de cédula">
+        </div>
+        <div class="field">
+          <label>ROL</label>
+          <select id="newUserRole">
+            <option value="usuario">Usuario</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button id="btnCrearUsuario" class="btn-primary">CREAR USUARIO</button>
+        <button id="btnRecargarUsuarios" class="btn-secondary">RECARGAR LISTA</button>
+      </div>
+      <div id="userAdminMessage"></div>
+    </section>
+
+    <section class="panel" style="margin-top:18px">
+      <div class="results-toolbar">
+        <h4>Usuarios autorizados</h4>
+        <span id="usersCount" class="results-count"></span>
+      </div>
+      <div id="usersList"><div class="empty-state">Cargando usuarios...</div></div>
+    </section>
+  `;
+
+  $("btnCrearUsuario").addEventListener("click", crearUsuarioDesdeAdmin);
+  $("btnRecargarUsuarios").addEventListener("click", cargarUsuariosAdmin);
+  await cargarUsuariosAdmin();
+}
+
+async function crearUsuarioDesdeAdmin() {
+  if (state.perfil?.rol !== "admin") return;
+
+  const nombre = $("newUserName").value.trim();
+  const correo = $("newUserEmail").value.trim().toLowerCase();
+  const cedula = $("newUserCedula").value.trim();
+  const rol = $("newUserRole").value;
+
+  if (!nombre || !correo || !cedula) {
+    mostrarAdminMensaje("Complete nombre, correo y cédula.", "warn");
+    return;
+  }
+
+  if (cedula.length < 6) {
+    mostrarAdminMensaje("La cédula debe contener al menos 6 caracteres.", "warn");
+    return;
+  }
+
+  const btn = $("btnCrearUsuario");
+  btn.disabled = true;
+  btn.textContent = "CREANDO...";
+
+  let secondaryApp = null;
+  try {
+    // Se usa una segunda instancia de Firebase para crear la cuenta
+    // sin cerrar la sesión del administrador actual.
+    secondaryApp = initializeApp(firebaseConfig, `userCreator-${Date.now()}`);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, correo, cedula);
+    const uid = cred.user.uid;
+
+    await setDoc(doc(db, "usuarios", uid), {
+      nombre,
+      correo,
+      rol,
+      activo: true,
+      creadoPorUid: state.perfil.uid,
+      creadoPorCorreo: state.perfil.correo,
+      creadoEn: serverTimestamp()
+    });
+
+    await signOut(secondaryAuth);
+
+    $("newUserName").value = "";
+    $("newUserEmail").value = "";
+    $("newUserCedula").value = "";
+    $("newUserRole").value = "usuario";
+
+    mostrarAdminMensaje(`Usuario ${escapeHtml(nombre)} creado correctamente.`, "ok");
+    await cargarUsuariosAdmin();
+  } catch (e) {
+    console.error(e);
+    let msg = "No fue posible crear el usuario.";
+    if (e.code === "auth/email-already-in-use") msg = "Ese correo ya tiene una cuenta en Firebase Authentication.";
+    else if (e.code === "auth/invalid-email") msg = "El correo no es válido.";
+    else if (e.code === "auth/weak-password") msg = "La cédula no cumple la longitud mínima requerida por Firebase.";
+    else if (e.code === "permission-denied") msg = "Firestore bloqueó la creación del perfil. Revise que su cuenta siga siendo admin.";
+    mostrarAdminMensaje(msg, "error");
+  } finally {
+    if (secondaryApp) {
+      try { await deleteApp(secondaryApp); } catch {}
+    }
+    btn.disabled = false;
+    btn.textContent = "CREAR USUARIO";
+  }
+}
+
+function mostrarAdminMensaje(texto, tipo) {
+  const el = $("userAdminMessage");
+  if (el) el.innerHTML = `<div class="notice ${tipo}">${texto}</div>`;
+}
+
+async function cargarUsuariosAdmin() {
+  if (state.perfil?.rol !== "admin") return;
+  const list = $("usersList");
+  if (!list) return;
+  list.innerHTML = `<div class="empty-state">Consultando usuarios...</div>`;
+
+  try {
+    const snap = await getDocs(collection(db, "usuarios"));
+    const users = snap.docs.map(d => ({uid:d.id, ...d.data()}))
+      .sort((a,b) => String(a.nombre || a.correo || "").localeCompare(String(b.nombre || b.correo || ""), "es"));
+
+    $("usersCount").textContent = `${users.length} usuario${users.length===1?"":"s"}`;
+
+    if (!users.length) {
+      list.innerHTML = `<div class="empty-state">No hay usuarios registrados.</div>`;
+      return;
+    }
+
+    list.innerHTML = `
+      <div class="results-wrap">
+        <table class="results-table admin-users-table">
+          <thead>
+            <tr><th>NOMBRE</th><th>CORREO</th><th>ROL</th><th>ESTADO</th><th>ACCIONES</th></tr>
+          </thead>
+          <tbody>
+            ${users.map((u,i) => `
+              <tr>
+                <td>${escapeHtml(u.nombre || "—")}</td>
+                <td>${escapeHtml(u.correo || "—")}</td>
+                <td>
+                  <select class="inline-select" data-role-user="${i}" ${u.uid===state.perfil.uid ? "disabled" : ""}>
+                    <option value="usuario" ${u.rol==="usuario"?"selected":""}>Usuario</option>
+                    <option value="admin" ${u.rol==="admin"?"selected":""}>Admin</option>
+                  </select>
+                </td>
+                <td>
+                  <span class="user-status ${u.activo===true ? "active" : "inactive"}">
+                    ${u.activo===true ? "ACTIVO" : "INACTIVO"}
+                  </span>
+                </td>
+                <td>
+                  <div class="saved-actions">
+                    <button class="btn-small" data-toggle-user="${i}" ${u.uid===state.perfil.uid ? "disabled" : ""}>
+                      ${u.activo===true ? "DESACTIVAR" : "ACTIVAR"}
+                    </button>
+                    <button class="btn-danger" data-remove-access="${i}" ${u.uid===state.perfil.uid ? "disabled" : ""}>
+                      RETIRAR ACCESO
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="notice info" style="margin-top:12px">
+        <b>Retirar acceso</b> elimina el perfil autorizado de Firestore, por lo que esa persona ya no podrá ingresar al sistema.
+        La cuenta técnica de Firebase Authentication puede seguir existiendo; eliminarla completamente requiere Firebase Admin/Cloud Functions.
+      </div>
+    `;
+
+    list.querySelectorAll("[data-role-user]").forEach(select => {
+      select.addEventListener("change", async () => {
+        const u = users[Number(select.dataset.roleUser)];
+        if (u.uid === state.perfil.uid) return;
+        try {
+          await updateDoc(doc(db, "usuarios", u.uid), {rol: select.value});
+          mostrarAdminMensaje(`Rol actualizado para ${escapeHtml(u.nombre || u.correo)}.`, "ok");
+          await cargarUsuariosAdmin();
+        } catch (e) {
+          console.error(e);
+          mostrarAdminMensaje("No fue posible actualizar el rol.", "error");
+        }
+      });
+    });
+
+    list.querySelectorAll("[data-toggle-user]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const u = users[Number(btn.dataset.toggleUser)];
+        if (u.uid === state.perfil.uid) return;
+        try {
+          await updateDoc(doc(db, "usuarios", u.uid), {activo: !(u.activo === true)});
+          await cargarUsuariosAdmin();
+        } catch (e) {
+          console.error(e);
+          mostrarAdminMensaje("No fue posible cambiar el estado del usuario.", "error");
+        }
+      });
+    });
+
+    list.querySelectorAll("[data-remove-access]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const u = users[Number(btn.dataset.removeAccess)];
+        if (u.uid === state.perfil.uid) return;
+        const ok = confirm(`¿Seguro que desea retirar el acceso a ${u.nombre || u.correo}?`);
+        if (!ok) return;
+
+        try {
+          await deleteDoc(doc(db, "usuarios", u.uid));
+          mostrarAdminMensaje("Acceso retirado correctamente.", "ok");
+          await cargarUsuariosAdmin();
+        } catch (e) {
+          console.error(e);
+          mostrarAdminMensaje("No fue posible retirar el acceso.", "error");
+        }
+      });
+    });
+
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = `<div class="notice error">No fue posible consultar los usuarios.</div>`;
+  }
+}
+
+async function renderRegistroAccesos() {
+  if (state.perfil?.rol !== "admin") {
+    renderPlaceholder("Acceso restringido", "Este módulo está disponible únicamente para administradores.");
+    return;
+  }
+
+  workspaceTitle.textContent = "Registro de accesos";
+  workspaceContent.innerHTML = `
+    <section class="panel">
+      <div class="results-toolbar">
+        <div>
+          <h4>Historial de ingresos</h4>
+          <span class="results-count">Visible únicamente para administradores</span>
+        </div>
+        <button id="btnRecargarAccesos" class="btn-secondary">RECARGAR</button>
+      </div>
+      <div id="accessList"><div class="empty-state">Cargando accesos...</div></div>
+    </section>
+  `;
+
+  $("btnRecargarAccesos").addEventListener("click", cargarRegistroAccesos);
+  await cargarRegistroAccesos();
+}
+
+async function cargarRegistroAccesos() {
+  const list = $("accessList");
+  if (!list || state.perfil?.rol !== "admin") return;
+  list.innerHTML = `<div class="empty-state">Consultando accesos...</div>`;
+
+  try {
+    const snap = await getDocs(collection(db, "accesos"));
+    let items = snap.docs.map(d => ({id:d.id, ...d.data()}));
+    items.sort((a,b) => timestampMillis(b.fechaHora) - timestampMillis(a.fechaHora));
+    items = items.slice(0, 250);
+
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state">Todavía no hay accesos registrados.</div>`;
+      return;
+    }
+
+    list.innerHTML = `
+      <div class="results-wrap">
+        <table class="results-table">
+          <thead>
+            <tr><th>USUARIO</th><th>CORREO</th><th>ROL</th><th>FECHA / HORA</th></tr>
+          </thead>
+          <tbody>
+            ${items.map(x => `
+              <tr>
+                <td>${escapeHtml(x.nombre || "—")}</td>
+                <td>${escapeHtml(x.correo || "—")}</td>
+                <td>${escapeHtml(String(x.rol || "usuario").toUpperCase())}</td>
+                <td>${escapeHtml(formatearTimestamp(x.fechaHora))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = `<div class="notice error">No fue posible consultar el registro de accesos.</div>`;
+  }
+}
 
 
 /* =========================================================

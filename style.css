@@ -344,3 +344,31 @@ button{cursor:pointer}
 @media(max-width:620px){
   .route-grid{grid-template-columns:1fr}
 }
+
+
+/* =========================================================
+   V7 · ADMINISTRACIÓN DE USUARIOS
+   ========================================================= */
+.admin-user-form{
+  display:grid;grid-template-columns:1fr 1.2fr 1fr .8fr;gap:12px
+}
+.inline-select{
+  min-height:36px;padding:0 9px;border-radius:7px;
+  border:1px solid rgba(120,189,244,.2);background:#0c1b2c;color:#eef7ff
+}
+.user-status{
+  display:inline-flex;padding:5px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.6px
+}
+.user-status.active{
+  color:#b9ebd1;border:1px solid rgba(86,214,154,.25);background:rgba(86,214,154,.06)
+}
+.user-status.inactive{
+  color:#e9b0b5;border:1px solid rgba(255,109,122,.25);background:rgba(255,109,122,.06)
+}
+.admin-users-table td{vertical-align:middle}
+@media(max-width:1050px){
+  .admin-user-form{grid-template-columns:1fr 1fr}
+}
+@media(max-width:620px){
+  .admin-user-form{grid-template-columns:1fr}
+}
