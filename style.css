@@ -447,3 +447,446 @@ button{cursor:pointer}
   .simple-editor-header{flex-direction:column}
   .simplified-settings{grid-template-columns:1fr}
 }
+
+
+/* =========================================================
+   V9 · DESPLEGABLES DE HORA Y MINUTOS
+   ========================================================= */
+.time-select-group{
+  display:grid;
+  grid-template-columns:minmax(54px,1fr) auto minmax(54px,1fr);
+  gap:5px;
+  align-items:center;
+}
+.time-select{
+  width:100%;
+  min-height:40px;
+  padding:0 7px;
+  border-radius:7px;
+  border:1px solid rgba(120,189,244,.18);
+  background:#0a1929;
+  color:#eef7ff;
+  outline:none;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.time-select:focus{
+  border-color:var(--gold);
+  box-shadow:0 0 0 2px rgba(225,188,102,.07);
+}
+.time-select:disabled{
+  opacity:.38;
+  cursor:not-allowed;
+}
+.time-colon{
+  color:var(--gold);
+  font-weight:900;
+  text-align:center;
+}
+.compact-time-selects{min-width:132px}
+.simple-editor-table .time-select{
+  min-height:36px;
+  font-size:12px;
+}
+.restriction-time .time-select-group{max-width:250px}
+@media(max-width:620px){
+  .time-select-group{
+    grid-template-columns:minmax(58px,1fr) auto minmax(58px,1fr);
+  }
+}
+
+
+/* =========================================================
+   V10 · EXPERIENCIA MÓVIL
+   ========================================================= */
+
+/* Escritorio conserva la tabla completa. */
+@media (max-width: 760px) {
+  body{
+    font-size:13px;
+  }
+
+  .dashboard{
+    width:96%;
+    padding-top:18px;
+  }
+
+  .topbar{
+    min-height:72px;
+    padding:8px 10px;
+  }
+
+  .brand{
+    gap:9px;
+  }
+
+  .brand-logo{
+    width:38px;
+    height:45px;
+  }
+
+  .brand-title{
+    font-size:18px;
+    letter-spacing:1.7px;
+  }
+
+  .brand-subtitle{
+    font-size:9px;
+    letter-spacing:.8px;
+  }
+
+  .topbar-actions{
+    gap:5px;
+  }
+
+  .topbar-actions .btn-outline{
+    padding:7px 9px;
+    font-size:10px;
+  }
+
+  .hero h2{
+    font-size:22px;
+  }
+
+  .hero p{
+    font-size:11px;
+  }
+
+  .module-grid{
+    gap:10px;
+    margin-top:18px;
+  }
+
+  .module-card{
+    min-height:128px;
+    padding:17px 16px;
+  }
+
+  .module-kicker{
+    font-size:9px;
+    margin-bottom:7px;
+  }
+
+  .module-card strong{
+    font-size:16px;
+    max-width:88%;
+  }
+
+  .module-description{
+    font-size:11px;
+    margin-top:7px;
+    max-width:88%;
+  }
+
+  .module-arrow{
+    right:15px;
+    bottom:12px;
+    font-size:24px;
+  }
+
+  .workspace{
+    margin-top:14px;
+  }
+
+  .workspace-header{
+    padding:13px 14px;
+  }
+
+  .workspace-header h3{
+    font-size:17px;
+  }
+
+  .workspace-content{
+    padding:10px;
+  }
+
+  .panel{
+    padding:12px;
+    border-radius:10px;
+  }
+
+  .panel-title{
+    font-size:14px;
+  }
+
+  .panel-subtitle{
+    font-size:10px;
+    line-height:1.35;
+  }
+
+  .organizer-title-row{
+    gap:10px;
+  }
+
+  .organizer-head-actions{
+    gap:6px;
+  }
+
+  .organizer-head-actions button,
+  .summary-actions button{
+    padding:8px 9px;
+    font-size:9px;
+    min-height:36px;
+  }
+
+  .organizer-settings{
+    gap:8px;
+    margin-top:10px;
+  }
+
+  .organizer-rule{
+    min-height:70px;
+    padding:10px;
+  }
+
+  .organizer-rule span{
+    font-size:8px;
+  }
+
+  .organizer-rule strong{
+    font-size:12px;
+  }
+
+  .organizer-rule small{
+    font-size:9px;
+  }
+
+  .simple-editor-header{
+    margin-bottom:9px;
+  }
+
+  /* La tabla deja de ser una tabla ancha y cada TR se vuelve una tarjeta. */
+  .simple-table-wrap{
+    border:0;
+    overflow:visible;
+    background:transparent;
+  }
+
+  .simple-editor-table{
+    display:block;
+    min-width:0;
+    width:100%;
+    background:transparent;
+  }
+
+  .simple-editor-table thead{
+    display:none;
+  }
+
+  .simple-editor-table tbody{
+    display:grid;
+    gap:10px;
+  }
+
+  .simple-editor-table tr{
+    display:block;
+    width:100%;
+    border:1px solid rgba(120,189,244,.18);
+    border-radius:11px;
+    background:linear-gradient(145deg,#091827,#0b1c2f);
+    overflow:hidden;
+  }
+
+  .simple-editor-table tr.row-warning{
+    border-color:rgba(241,199,91,.28);
+  }
+
+  .simple-editor-table tr.row-ok{
+    border-color:rgba(86,214,154,.18);
+  }
+
+  .simple-editor-table td{
+    display:grid;
+    grid-template-columns:92px minmax(0,1fr);
+    align-items:center;
+    gap:8px;
+    width:100%;
+    padding:7px 9px;
+    border-bottom:1px solid rgba(120,189,244,.08);
+    background:transparent!important;
+  }
+
+  .simple-editor-table td:last-child{
+    border-bottom:0;
+  }
+
+  .simple-editor-table td::before{
+    content:attr(data-label);
+    color:#7f9ab4;
+    font-size:8px;
+    font-weight:900;
+    letter-spacing:.55px;
+    line-height:1.25;
+  }
+
+  .simple-leg-number{
+    width:27px;
+    height:27px;
+    margin:0;
+    font-size:12px;
+  }
+
+  .simple-order{
+    margin-top:4px;
+  }
+
+  .mini-icon{
+    min-width:27px;
+    width:27px;
+    height:27px;
+    font-size:11px;
+  }
+
+  .simple-route{
+    min-width:0;
+    width:100%;
+    grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr);
+  }
+
+  .simple-route input{
+    min-width:0;
+    min-height:34px;
+    padding:0 7px;
+    font-size:11px;
+  }
+
+  .simple-metric{
+    display:inline-block;
+    font-size:13px;
+    margin:0 6px 0 0;
+  }
+
+  .simple-duration,
+  .simple-duration-select{
+    display:inline-block;
+    font-size:8px;
+  }
+
+  .compact-time-selects{
+    min-width:0;
+    width:100%;
+  }
+
+  .time-select-group{
+    grid-template-columns:minmax(0,1fr) 8px minmax(0,1fr);
+    gap:3px;
+    width:100%;
+  }
+
+  .time-select{
+    min-width:0;
+    min-height:34px;
+    padding:0 4px;
+    font-size:11px;
+  }
+
+  .simple-observation{
+    min-width:0;
+    width:100%;
+    min-height:54px;
+    padding:7px;
+    font-size:11px;
+  }
+
+  .simple-actions{
+    justify-content:flex-start;
+  }
+
+  .simple-alert,
+  .simple-valid{
+    margin-top:4px;
+    font-size:8px;
+    width:max-content;
+  }
+
+  .notice{
+    font-size:10px;
+    padding:9px 10px;
+  }
+
+  .field label,
+  .login-form label{
+    font-size:10px;
+  }
+
+  .field-help{
+    font-size:9px;
+  }
+
+  .action-row{
+    gap:6px;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-small,
+  .btn-danger{
+    padding:8px 9px;
+    font-size:9px;
+  }
+
+  /* El modo avanzado también se compacta. */
+  .leg-card{
+    padding:11px;
+  }
+
+  .leg-metrics strong{
+    font-size:14px;
+  }
+
+  .duration-row{
+    gap:7px;
+  }
+
+  .time-grid{
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+
+  .route-block{
+    padding:8px;
+  }
+
+  .route-grid{
+    gap:6px;
+  }
+
+  .route-grid input[type="text"]{
+    min-height:34px;
+    font-size:11px;
+  }
+
+  .observation-field textarea{
+    min-height:65px;
+    font-size:11px;
+  }
+
+  .app-footer{
+    font-size:9px;
+    padding-top:12px;
+  }
+}
+
+/* Pantallas especialmente estrechas */
+@media (max-width: 390px) {
+  .simple-editor-table td{
+    grid-template-columns:78px minmax(0,1fr);
+    padding:6px 7px;
+  }
+
+  .simple-editor-table td::before{
+    font-size:7px;
+  }
+
+  .time-select{
+    font-size:10px;
+  }
+
+  .module-card strong{
+    font-size:15px;
+  }
+
+  .brand-title{
+    font-size:16px;
+  }
+}

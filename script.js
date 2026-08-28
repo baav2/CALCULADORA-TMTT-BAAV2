@@ -292,7 +292,7 @@ function renderCalculadora() {
             <span>No iniciar antes de</span>
           </label>
           <div class="field restriction-time">
-            <input id="horaInicioMin" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" disabled>
+            ${timeDropdownHtml("horaInicioMin", "", true)}
           </div>
 
           <label class="check-row">
@@ -300,7 +300,7 @@ function renderCalculadora() {
             <span>No finalizar después de</span>
           </label>
           <div class="field restriction-time">
-            <input id="horaFinMax" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" disabled>
+            ${timeDropdownHtml("horaFinMax", "", true)}
           </div>
         </div>
 
@@ -358,19 +358,10 @@ function renderCalculadora() {
 function enlazarCalculadora() {
   document.querySelectorAll('input[name="modo"]').forEach(el => el.addEventListener("change", actualizarModo));
   document.querySelectorAll('input[name="restriccionModo"]').forEach(el => el.addEventListener("change", actualizarRestricciones));
-  $("usarInicioMin").addEventListener("change", e => $("horaInicioMin").disabled = !e.target.checked);
-  $("usarFinMax").addEventListener("change", e => $("horaFinMax").disabled = !e.target.checked);
-  ["horaInicioMin","horaFinMax"].forEach(id => {
-    $(id).addEventListener("blur", () => {
-      const normal = normalizarHora24($(id).value);
-      if (!normal && $(id).value.trim()) {
-        $(id).classList.add("invalid-time");
-      } else {
-        $(id).classList.remove("invalid-time");
-        $(id).value = normal || "";
-      }
-    });
-  });
+  enlazarTimeDropdown("horaInicioMin");
+  enlazarTimeDropdown("horaFinMax");
+  $("usarInicioMin").addEventListener("change", e => setTimeDropdownDisabled("horaInicioMin", !e.target.checked));
+  $("usarFinMax").addEventListener("change", e => setTimeDropdownDisabled("horaFinMax", !e.target.checked));
   $("btnGenerar").addEventListener("click", generarDesdeFormulario);
   $("btnLimpiarCalc").addEventListener("click", renderCalculadora);
   $("btnAgregarFiltro").addEventListener("click", agregarFiltro);
@@ -411,10 +402,10 @@ function actualizarRestricciones() {
   if (!con) {
     $("usarInicioMin").checked = false;
     $("usarFinMax").checked = false;
-    $("horaInicioMin").disabled = true;
-    $("horaFinMax").disabled = true;
-    $("horaInicioMin").value = "";
-    $("horaFinMax").value = "";
+    setTimeDropdownDisabled("horaInicioMin", true);
+    setTimeDropdownDisabled("horaFinMax", true);
+    setTimeDropdownValue("horaInicioMin", "");
+    setTimeDropdownValue("horaFinMax", "");
   }
 }
 
@@ -669,8 +660,8 @@ function leerRestricciones() {
   const con = document.querySelector('input[name="restriccionModo"]:checked').value === "con";
   return {
     activas: con,
-    noIniciarAntes: con && $("usarInicioMin").checked ? $("horaInicioMin").value : null,
-    noFinalizarDespues: con && $("usarFinMax").checked ? $("horaFinMax").value : null
+    noIniciarAntes: con && $("usarInicioMin").checked ? getTimeDropdownValue("horaInicioMin") : null,
+    noFinalizarDespues: con && $("usarFinMax").checked ? getTimeDropdownValue("horaFinMax") : null
   };
 }
 
@@ -899,9 +890,8 @@ function renderOrganizador() {
       <div class="organizer-settings simplified-settings">
         <div class="field">
           <label>INICIO TT PRIMERA PIERNA · FORMATO 24 HORAS</label>
-          <input id="inicioGeneral" class="time24-input" type="text" inputmode="numeric" maxlength="5"
-                 placeholder="HH:MM · Ej. 13:00" value="${escapeHtml(o.inicioGeneral || "")}">
-          <div class="field-help">Escriba 1300 o 13:00. El sistema lo dejará como 13:00.</div>
+          ${timeDropdownHtml("inicioGeneral", o.inicioGeneral || "", false)}
+          <div class="field-help">Seleccione la hora y los minutos. Los minutos avanzan de 5 en 5.</div>
         </div>
 
         <div class="organizer-rule">
@@ -951,14 +941,8 @@ function renderOrganizador() {
     <section id="finalSummaryPanel" class="panel hidden" style="margin-top:18px"></section>
   `;
 
-  $("inicioGeneral").addEventListener("blur", () => {
-    const normal = normalizarHora24($("inicioGeneral").value);
-    if (!normal && $("inicioGeneral").value.trim()) {
-      $("inicioGeneral").classList.add("invalid-time");
-      return;
-    }
-    $("inicioGeneral").classList.remove("invalid-time");
-    $("inicioGeneral").value = normal || "";
+  enlazarTimeDropdown("inicioGeneral", () => {
+    const normal = getTimeDropdownValue("inicioGeneral");
     o.inicioGeneral = normal || "";
     if (normal) {
       o.piernas[0].inicioTT = normal;
@@ -966,10 +950,6 @@ function renderOrganizador() {
     }
     renderTablaSimple();
     if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
-  });
-
-  $("inicioGeneral").addEventListener("keydown", e => {
-    if (e.key === "Enter") e.target.blur();
   });
 
   $("btnVolverCalc").addEventListener("click", renderCalculadora);
@@ -1020,7 +1000,7 @@ function renderTablaSimple() {
 
             return `
               <tr class="${errores.length ? "row-warning" : (p.inicioTT ? "row-ok" : "")}">
-                <td>
+                <td data-label="PIERNA">
                   <div class="simple-leg-number">${i+1}</div>
                   <div class="simple-order">
                     <button class="mini-icon" data-simple-up="${i}" ${i===0 || p.bloqueada ? "disabled" : ""}>↑</button>
@@ -1028,7 +1008,7 @@ function renderTablaSimple() {
                   </div>
                 </td>
 
-                <td>
+                <td data-label="RUTA">
                   <div class="simple-route">
                     <input type="text" data-simple-route="${i}" data-route-field="rutaDe"
                            value="${escapeHtml(p.rutaDe || "")}" placeholder="DE">
@@ -1038,12 +1018,12 @@ function renderTablaSimple() {
                   </div>
                 </td>
 
-                <td>
+                <td data-label="TM">
                   <strong class="simple-metric">${fmt(p.tm)}</strong>
                   ${durationSelectSimple(`simpleTmDur-${i}`, tmOpts, p.tmMin)}
                 </td>
 
-                <td>
+                <td data-label="TT">
                   <strong class="simple-metric">${fmt(p.tt)}</strong>
                   ${durationSelectSimple(`simpleTtDur-${i}`, ttOpts, p.ttMin)}
                 </td>
@@ -1053,12 +1033,12 @@ function renderTablaSimple() {
                 ${simpleTimeCell(i,"finTM",p.finTM)}
                 ${simpleTimeCell(i,"finTT",p.finTT)}
 
-                <td>
+                <td data-label="OBSERVACIONES">
                   <textarea class="simple-observation" data-simple-observation="${i}"
                             placeholder="Escriba lo realizado...">${escapeHtml(p.observacion || "")}</textarea>
                 </td>
 
-                <td>
+                <td data-label="ACCIONES">
                   <div class="simple-actions">
                     <button class="mini-icon" data-simple-lock="${i}" title="${p.bloqueada ? "Desbloquear" : "Bloquear"}">${p.bloqueada ? "🔒" : "🔓"}</button>
                     <button class="mini-icon" data-simple-recalc="${i}" title="Reorganizar desde aquí">↻</button>
@@ -1078,11 +1058,20 @@ function renderTablaSimple() {
 }
 
 function simpleTimeCell(i, campo, valor) {
+  const labels = {
+    inicioTT: "INICIO TT",
+    inicioTM: "INICIO TM",
+    finTM: "TÉRMINO TM",
+    finTT: "TÉRMINO TT"
+  };
+
   return `
-    <td>
-      <input class="simple-time time24-input" type="text" inputmode="numeric" maxlength="5"
-             data-simple-time="${i}" data-time-field="${campo}"
-             value="${escapeHtml(valor || "")}" placeholder="HH:MM">
+    <td data-label="${labels[campo] || campo}">
+      ${timeDropdownHtml(`simpleTime-${i}-${campo}`, valor || "", false, {
+        index: i,
+        field: campo,
+        className: "compact-time-selects"
+      })}
     </td>
   `;
 }
@@ -1115,37 +1104,25 @@ function enlazarTablaSimple() {
     });
   });
 
-  document.querySelectorAll("[data-simple-time]").forEach(input => {
-    input.addEventListener("blur", () => {
-      const i = Number(input.dataset.simpleTime);
-      const campo = input.dataset.timeField;
-      const normal = normalizarHora24(input.value);
+  document.querySelectorAll("#simpleTableContainer [data-time-group][data-time-index]").forEach(group => {
+    const i = Number(group.dataset.timeIndex);
+    const campo = group.dataset.timeField;
+    const prefix = group.dataset.timeGroup;
 
-      if (!normal && input.value.trim()) {
-        input.classList.add("invalid-time");
-        return;
-      }
-
-      input.classList.remove("invalid-time");
-      input.value = normal || "";
+    enlazarTimeDropdown(prefix, () => {
+      const normal = getTimeDropdownValue(prefix);
       o.piernas[i][campo] = normal || "";
 
-      // Solo Inicio TT dispara organización automática.
-      // El resto queda exactamente como el usuario lo escriba y se valida.
       if (campo === "inicioTT" && normal) {
         if (i === 0) {
           o.inicioGeneral = normal;
-          if ($("inicioGeneral")) $("inicioGeneral").value = normal;
+          setTimeDropdownValue("inicioGeneral", normal);
         }
         recalcularDesde(i, true);
       }
 
       renderTablaSimple();
       if (!$("advancedOrganizerPanel").classList.contains("hidden")) renderPiernas();
-    });
-
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") e.target.blur();
     });
   });
 
@@ -1295,8 +1272,11 @@ function timeControl(i, campo, label, value) {
   return `
     <div class="field compact">
       <label>${label}</label>
-      <input class="time24-input" type="text" inputmode="numeric" maxlength="5"
-             data-time-index="${i}" data-time-field="${campo}" value="${value || ""}" placeholder="HH:MM">
+      ${timeDropdownHtml(`advancedTime-${i}-${campo}`, value || "", false, {
+        index: i,
+        field: campo,
+        className: "compact-time-selects"
+      })}
     </div>
   `;
 }
@@ -1353,36 +1333,26 @@ function enlazarPiernas() {
     });
   });
 
-  document.querySelectorAll("[data-time-index]").forEach(input => {
-    input.addEventListener("blur", () => {
-      const i = Number(input.dataset.timeIndex);
-      const campo = input.dataset.timeField;
-      const p = o.piernas[i];
-      const normal = normalizarHora24(input.value);
+  document.querySelectorAll("#advancedOrganizerPanel [data-time-group][data-time-index]").forEach(group => {
+    const i = Number(group.dataset.timeIndex);
+    const campo = group.dataset.timeField;
+    const prefix = group.dataset.timeGroup;
+    const p = o.piernas[i];
 
-      if (!normal && input.value.trim()) {
-        input.classList.add("invalid-time");
-        return;
-      }
-
-      input.classList.remove("invalid-time");
-      input.value = normal || "";
+    enlazarTimeDropdown(prefix, () => {
+      const normal = getTimeDropdownValue(prefix);
       p[campo] = normal || "";
 
       if (campo === "inicioTT" && normal) {
         if (i === 0) {
           o.inicioGeneral = normal;
-          $("inicioGeneral").value = normal;
+          setTimeDropdownValue("inicioGeneral", normal);
         }
         recalcularDesde(i, true);
       }
 
       renderPiernas();
       renderTablaSimple();
-    });
-
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") e.target.blur();
     });
   });
 
@@ -1497,6 +1467,80 @@ function minutosPracticos(valor) {
     return [base - 5, base];
   }
   return [base];
+}
+
+
+function timeDropdownHtml(prefix, value = "", disabled = false, meta = {}) {
+  const normal = normalizarHora24(value) || "";
+  const parts = normal ? normal.split(":") : ["", ""];
+  const selectedHour = parts[0];
+  const selectedMinute = parts[1];
+  const hours = Array.from({length:24}, (_,i) => String(i).padStart(2,"0"));
+  const minutes = Array.from({length:12}, (_,i) => String(i*5).padStart(2,"0"));
+  const disabledAttr = disabled ? "disabled" : "";
+  const extraClass = meta.className ? ` ${meta.className}` : "";
+  const metaAttrs = Number.isInteger(meta.index)
+    ? ` data-time-index="${meta.index}" data-time-field="${meta.field || ""}"`
+    : "";
+
+  return `
+    <div class="time-select-group${extraClass}" data-time-group="${prefix}"${metaAttrs}>
+      <select id="${prefix}-hour" class="time-select hour-select" ${disabledAttr}>
+        <option value="">HH</option>
+        ${hours.map(h => `<option value="${h}" ${h === selectedHour ? "selected" : ""}>${h}</option>`).join("")}
+      </select>
+      <span class="time-colon">:</span>
+      <select id="${prefix}-minute" class="time-select minute-select" ${disabledAttr}>
+        <option value="">MM</option>
+        ${minutes.map(m => `<option value="${m}" ${m === selectedMinute ? "selected" : ""}>${m}</option>`).join("")}
+      </select>
+    </div>
+  `;
+}
+
+function enlazarTimeDropdown(prefix, callback = null) {
+  const hour = $(`${prefix}-hour`);
+  const minute = $(`${prefix}-minute`);
+  if (!hour || !minute) return;
+
+  const onChange = () => {
+    if (callback) callback(getTimeDropdownValue(prefix));
+  };
+
+  hour.addEventListener("change", onChange);
+  minute.addEventListener("change", onChange);
+}
+
+function getTimeDropdownValue(prefix) {
+  const hour = $(`${prefix}-hour`);
+  const minute = $(`${prefix}-minute`);
+  if (!hour || !minute || hour.value === "" || minute.value === "") return "";
+  return `${hour.value}:${minute.value}`;
+}
+
+function setTimeDropdownValue(prefix, value) {
+  const hour = $(`${prefix}-hour`);
+  const minute = $(`${prefix}-minute`);
+  if (!hour || !minute) return;
+
+  const normal = normalizarHora24(value);
+  if (!normal) {
+    hour.value = "";
+    minute.value = "";
+    return;
+  }
+
+  const [hh, mm] = normal.split(":");
+  hour.value = hh;
+  minute.value = String(Math.round(Number(mm) / 5) * 5).padStart(2,"0");
+  if (minute.value === "60") minute.value = "55";
+}
+
+function setTimeDropdownDisabled(prefix, disabled) {
+  const hour = $(`${prefix}-hour`);
+  const minute = $(`${prefix}-minute`);
+  if (hour) hour.disabled = disabled;
+  if (minute) minute.disabled = disabled;
 }
 
 function normalizarHora24(valor) {
