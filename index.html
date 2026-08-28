@@ -17,10 +17,12 @@
 
       <form id="loginForm" class="login-form">
         <label for="cedula">NÚMERO DE CÉDULA</label>
-        <input id="cedula" type="password" inputmode="numeric" placeholder="Ingrese su número de cédula">
+        <input id="cedula" type="password" inputmode="numeric" autocomplete="current-password"
+               placeholder="Ingrese su número de cédula">
 
         <label for="correo">CORREO INSTITUCIONAL</label>
-        <input id="correo" type="email" placeholder="Ingrese su correo institucional">
+        <input id="correo" type="email" autocomplete="email"
+               placeholder="Ingrese su correo institucional">
 
         <button type="submit" class="btn-gold">INGRESAR</button>
       </form>
@@ -42,6 +44,7 @@
       </div>
 
       <div class="topbar-actions">
+        <span id="userBadge" class="user-badge"></span>
         <span class="status-pill"><span class="status-dot"></span>SISTEMA ACTIVO</span>
         <button id="btnSalir" class="btn-outline">SALIR</button>
       </div>
@@ -60,14 +63,14 @@
         <button class="module-card" data-module="calculadora">
           <span class="module-kicker">MÓDULO PRINCIPAL</span>
           <strong>CALCULADORA TM–TT</strong>
-          <span class="module-description">Generar combinaciones por TM o TT</span>
+          <span class="module-description">Generar combinaciones únicas por TM o TT</span>
           <span class="module-arrow">→</span>
         </button>
 
         <button class="module-card" data-module="guardadas">
           <span class="module-kicker">CONSULTA</span>
           <strong>COMBINACIONES GUARDADAS</strong>
-          <span class="module-description">Buscar combinaciones únicas ya registradas</span>
+          <span class="module-description">Consultar una combinación base por Tipo, TM y TT</span>
           <span class="module-arrow">→</span>
         </button>
 
@@ -86,18 +89,15 @@
         </button>
       </section>
 
-      <section id="workspace" class="workspace">
+      <section id="workspace" class="workspace hidden">
         <div class="workspace-header">
           <div>
-            <span class="workspace-kicker">VISTA PREVIA</span>
-            <h3 id="workspaceTitle">Seleccione un módulo</h3>
+            <span class="workspace-kicker">MÓDULO</span>
+            <h3 id="workspaceTitle">Calculadora TM–TT</h3>
           </div>
-          <button id="btnCerrarModulo" class="btn-outline hidden">CERRAR</button>
+          <button id="btnCerrarModulo" class="btn-outline">CERRAR</button>
         </div>
-
-        <div id="workspaceContent" class="workspace-content">
-          <p>Seleccione una tarjeta del panel principal.</p>
-        </div>
+        <div id="workspaceContent" class="workspace-content"></div>
       </section>
 
       <footer class="app-footer">
