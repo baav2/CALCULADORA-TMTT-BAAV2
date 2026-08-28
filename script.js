@@ -816,6 +816,8 @@ function abrirOrganizador(combo) {
         inicioTM: p.inicioTM || "",
         finTM: p.finTM || "",
         finTT: p.finTT || "",
+        rutaDe: p.rutaDe || "",
+        rutaA: p.rutaA || "",
         observacion: p.observacion || "",
         bloqueada: false
       }))
@@ -833,6 +835,8 @@ function abrirOrganizador(combo) {
           inicioTM: "",
           finTM: "",
           finTT: "",
+          rutaDe: "",
+          rutaA: "",
           observacion: "",
           bloqueada: false
         };
@@ -980,6 +984,24 @@ function renderPiernas() {
           ${timeControl(i, "finTT", "TÉRMINO TT", p.finTT)}
         </div>
 
+        <div class="route-block">
+          <div class="route-title">RUTA</div>
+          <div class="route-grid">
+            <div class="field compact">
+              <label>DE</label>
+              <input type="text" data-route-index="${i}" data-route-field="rutaDe"
+                     value="${escapeHtml(p.rutaDe || "")}"
+                     placeholder="Ej. Tolemaida, SKTI, punto táctico...">
+            </div>
+            <div class="field compact">
+              <label>A</label>
+              <input type="text" data-route-index="${i}" data-route-field="rutaA"
+                     value="${escapeHtml(p.rutaA || "")}"
+                     placeholder="Ej. Popayán, SKPP, punto táctico...">
+            </div>
+          </div>
+        </div>
+
         <div class="field observation-field">
           <label>OBSERVACIONES DE LA PIERNA</label>
           <textarea data-observation-index="${i}" placeholder="Escriba libremente lo realizado en esta pierna...">${escapeHtml(p.observacion || "")}</textarea>
@@ -1051,6 +1073,14 @@ function enlazarPiernas() {
       if (i === 0 && o.inicioGeneral) p.inicioTT = o.inicioGeneral;
       recalcularDesde(i, true);
       renderPiernas();
+    });
+  });
+
+  document.querySelectorAll("[data-route-index]").forEach(input => {
+    input.addEventListener("input", () => {
+      const i = Number(input.dataset.routeIndex);
+      const campo = input.dataset.routeField;
+      o.piernas[i][campo] = input.value;
     });
   });
 
@@ -1336,14 +1366,16 @@ function mostrarResumenFinal() {
       <table class="results-table">
         <thead>
           <tr>
-            <th>PIERNA</th><th>TM</th><th>TT</th><th>INICIO TT</th>
+            <th>PIERNA</th><th>RUTA</th><th>TM</th><th>TT</th><th>INICIO TT</th>
             <th>INICIO TM</th><th>TÉRMINO TM</th><th>TÉRMINO TT</th><th>OBSERVACIONES</th>
           </tr>
         </thead>
         <tbody>
           ${o.piernas.map((p,i) => `
             <tr>
-              <td>${i+1}</td><td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
+              <td>${i+1}</td>
+              <td class="route-cell">${escapeHtml(p.rutaDe || "—")} → ${escapeHtml(p.rutaA || "—")}</td>
+              <td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
               <td>${p.inicioTT || "—"}</td><td>${p.inicioTM || "—"}</td>
               <td>${p.finTM || "—"}</td><td>${p.finTT || "—"}</td>
               <td class="observation-cell">${escapeHtml(p.observacion || "—")}</td>
@@ -1369,7 +1401,7 @@ async function copiarResumen() {
 
   o.piernas.forEach((p,i) => {
     lineas.push(
-      `PIERNA ${i+1} | TM ${fmt(p.tm)} | TT ${fmt(p.tt)} | Inicio TT ${p.inicioTT || "—"} | Inicio TM ${p.inicioTM || "—"} | Término TM ${p.finTM || "—"} | Término TT ${p.finTT || "—"} | Observaciones: ${p.observacion || "—"}`
+      `PIERNA ${i+1} | Ruta ${p.rutaDe || "—"} → ${p.rutaA || "—"} | TM ${fmt(p.tm)} | TT ${fmt(p.tt)} | Inicio TT ${p.inicioTT || "—"} | Inicio TM ${p.inicioTM || "—"} | Término TM ${p.finTM || "—"} | Término TT ${p.finTT || "—"} | Observaciones: ${p.observacion || "—"}`
     );
   });
 
@@ -1436,6 +1468,8 @@ async function guardarVueloCompleto() {
         inicioTM: p.inicioTM,
         finTM: p.finTM,
         finTT: p.finTT,
+        rutaDe: p.rutaDe || "",
+        rutaA: p.rutaA || "",
         observacion: p.observacion || ""
       })),
       creadoPorUid: state.perfil.uid,
@@ -1599,12 +1633,14 @@ function mostrarVueloGuardado(vuelo) {
       <div class="results-wrap" style="margin-top:14px">
         <table class="results-table">
           <thead>
-            <tr><th>PIERNA</th><th>TM</th><th>TT</th><th>INICIO TT</th><th>INICIO TM</th><th>TÉRMINO TM</th><th>TÉRMINO TT</th><th>OBSERVACIONES</th></tr>
+            <tr><th>PIERNA</th><th>RUTA</th><th>TM</th><th>TT</th><th>INICIO TT</th><th>INICIO TM</th><th>TÉRMINO TM</th><th>TÉRMINO TT</th><th>OBSERVACIONES</th></tr>
           </thead>
           <tbody>
             ${(vuelo.piernas || []).map((p,i) => `
               <tr>
-                <td>${i+1}</td><td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
+                <td>${i+1}</td>
+                <td class="route-cell">${escapeHtml(p.rutaDe || "—")} → ${escapeHtml(p.rutaA || "—")}</td>
+                <td class="metric">${fmt(p.tm)}</td><td class="metric">${fmt(p.tt)}</td>
                 <td>${escapeHtml(p.inicioTT || "—")}</td><td>${escapeHtml(p.inicioTM || "—")}</td>
                 <td>${escapeHtml(p.finTM || "—")}</td><td>${escapeHtml(p.finTT || "—")}</td>
                 <td class="observation-cell">${escapeHtml(p.observacion || "—")}</td>
@@ -1631,6 +1667,8 @@ function usarVueloComoBase(vuelo) {
     inicioTM: p.inicioTM || "",
     finTM: p.finTM || "",
     finTT: p.finTT || "",
+    rutaDe: p.rutaDe || "",
+    rutaA: p.rutaA || "",
     observacion: p.observacion || ""
   }));
 

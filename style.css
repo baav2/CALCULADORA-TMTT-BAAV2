@@ -318,3 +318,29 @@ button{cursor:pointer}
   .saved-actions,.summary-actions{justify-content:stretch}
   .saved-actions button,.summary-actions button{flex:1}
 }
+
+
+/* =========================================================
+   V6 · RUTA POR PIERNA
+   ========================================================= */
+.route-block{
+  margin-top:12px;padding:12px;border:1px solid rgba(120,189,244,.14);
+  border-radius:10px;background:rgba(5,14,24,.38)
+}
+.route-title{
+  color:var(--gold);font-size:10px;font-weight:900;letter-spacing:1px;margin-bottom:2px
+}
+.route-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px
+}
+.route-grid input[type="text"]{
+  width:100%;min-height:44px;padding:0 13px;border:1px solid rgba(120,189,244,.18);
+  border-radius:9px;background:#0a1727;color:#eef7ff;outline:none
+}
+.route-grid input[type="text"]:focus{
+  border-color:var(--gold);box-shadow:0 0 0 3px rgba(225,188,102,.07)
+}
+.route-cell{min-width:190px;white-space:nowrap;color:#cfe7f8!important;font-weight:700}
+@media(max-width:620px){
+  .route-grid{grid-template-columns:1fr}
+}
