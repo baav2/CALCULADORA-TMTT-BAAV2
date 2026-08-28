@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BAAV2 | Sistema TM-TT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <section id="loginView" class="login-shell">
+    <div class="login-card">
+      <img src="assets/escudo-baav2.png" alt="Escudo BAAV2" class="login-logo">
+      <h1>BAAV2</h1>
+      <p class="login-subtitle">SISTEMA DE CÁLCULO Y ORGANIZACIÓN TM–TT</p>
+      <div class="gold-line"></div>
+
+      <form id="loginForm" class="login-form">
+        <label for="cedula">NÚMERO DE CÉDULA</label>
+        <input id="cedula" type="password" inputmode="numeric" placeholder="Ingrese su número de cédula">
+
+        <label for="correo">CORREO INSTITUCIONAL</label>
+        <input id="correo" type="email" placeholder="Ingrese su correo institucional">
+
+        <button type="submit" class="btn-gold">INGRESAR</button>
+      </form>
+
+      <p id="loginMessage" class="login-message"></p>
+      <p class="footer-note">SISTEMA TM–TT · BAAV2</p>
+      <p class="author-note">Hecho por Ricardo Galarza</p>
+    </div>
+  </section>
+
+  <section id="appView" class="app-shell hidden">
+    <header class="topbar">
+      <div class="brand">
+        <img src="assets/escudo-baav2.png" alt="Escudo BAAV2" class="brand-logo">
+        <div>
+          <div class="brand-title">BAAV2</div>
+          <div class="brand-subtitle">SISTEMA TM–TT</div>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <span class="status-pill"><span class="status-dot"></span>SISTEMA ACTIVO</span>
+        <button id="btnSalir" class="btn-outline">SALIR</button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="hero">
+        <div>
+          <h2>Panel Principal</h2>
+          <p>Cálculo, selección y organización de tiempos de vuelo</p>
+          <div class="gold-line small"></div>
+        </div>
+      </section>
+
+      <section class="module-grid">
+        <button class="module-card" data-module="calculadora">
+          <span class="module-kicker">MÓDULO PRINCIPAL</span>
+          <strong>CALCULADORA TM–TT</strong>
+          <span class="module-description">Generar combinaciones por TM o TT</span>
+          <span class="module-arrow">→</span>
+        </button>
+
+        <button class="module-card" data-module="guardadas">
+          <span class="module-kicker">CONSULTA</span>
+          <strong>COMBINACIONES GUARDADAS</strong>
+          <span class="module-description">Buscar combinaciones únicas ya registradas</span>
+          <span class="module-arrow">→</span>
+        </button>
+
+        <button class="module-card admin-only" data-module="usuarios">
+          <span class="module-kicker">ADMINISTRACIÓN</span>
+          <strong>ADMINISTRAR USUARIOS</strong>
+          <span class="module-description">Autorizar, retirar y asignar roles</span>
+          <span class="module-arrow">→</span>
+        </button>
+
+        <button class="module-card admin-only" data-module="accesos">
+          <span class="module-kicker">ADMINISTRACIÓN</span>
+          <strong>REGISTRO DE ACCESOS</strong>
+          <span class="module-description">Consultar quién ingresó y cuándo</span>
+          <span class="module-arrow">→</span>
+        </button>
+      </section>
+
+      <section id="workspace" class="workspace">
+        <div class="workspace-header">
+          <div>
+            <span class="workspace-kicker">VISTA PREVIA</span>
+            <h3 id="workspaceTitle">Seleccione un módulo</h3>
+          </div>
+          <button id="btnCerrarModulo" class="btn-outline hidden">CERRAR</button>
+        </div>
+
+        <div id="workspaceContent" class="workspace-content">
+          <p>Seleccione una tarjeta del panel principal.</p>
+        </div>
+      </section>
+
+      <footer class="app-footer">
+        <span>SISTEMA TM–TT · BAAV2</span>
+        <span>Hecho por Ricardo Galarza</span>
+      </footer>
+    </main>
+  </section>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

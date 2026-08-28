@@ -1,0 +1,11 @@
+CONTENIDO PARA GITHUB PAGES
+
+Sube al repositorio estos elementos en la raíz:
+- index.html
+- style.css
+- script.js
+- firestore.rules.txt
+- LEEME.txt
+- carpeta assets (con escudo-baav2.png)
+
+Las reglas de Firestore ya deben publicarse desde Firebase Console.
