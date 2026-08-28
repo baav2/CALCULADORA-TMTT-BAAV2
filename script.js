@@ -466,7 +466,7 @@ function generarDesdeFormulario() {
 
   renderFiltros();
   renderResultados();
-  $("resultsPanel").scrollIntoView({behavior:"smooth", block:"start"});
+  $("filterPanel").scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 function buscarCombinaciones({tabla, modo, objetivo, complementario, piernas, max01, ttMinimo}) {
